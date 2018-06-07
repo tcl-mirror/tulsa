@@ -1,0 +1,19 @@
+apply {ts {
+    $ts interp		tclsh8.6
+    $ts dir		/home/stu/tcl/tulsa/tests
+    $ts env		{TCLLIBPATH=../b ../tcltest}
+    $ts verbose		CSep
+    $ts debug		0
+    $ts singleproc	0
+    $ts preservecore	0
+    $ts match		{}
+    $ts skip		{}
+    $ts matchfiles	{}
+    $ts skipfiles	{}
+    $ts testdir		{}
+    $ts tmpdir		{}
+    $ts constraints	{}
+    $ts limitconstraints 0
+    $ts add [testpackage new /home/stu/tcl/tulsa/tests/tulsa.test -name tulsa.test -doc /home/stu/tcl/tulsa/doc/tulsa.txt -scan 1]
+    return $ts
+}} [testset new "Tulsa"]

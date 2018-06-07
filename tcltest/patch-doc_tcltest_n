@@ -1,0 +1,89 @@
+$OpenBSD$
+
+Index: doc/tcltest.n
+--- doc/tcltest.n.orig
++++ doc/tcltest.n
+@@ -8,7 +8,7 @@
+ '\" See the file "license.terms" for information on usage and redistribution
+ '\" of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+ '\"
+-.TH "tcltest" n 2.3 tcltest "Tcl Bundled Packages"
++.TH "tcltest" n 2002.4.1 tcltest "Tcl Bundled Packages"
+ .so man.macros
+ .BS
+ '\" Note:  do not modify the .SH NAME line immediately below!
+@@ -16,7 +16,7 @@
+ tcltest \- Test harness support code and utilities
+ .SH SYNOPSIS
+ .nf
+-\fBpackage require tcltest\fR ?\fB2.3\fR?
++\fBpackage require tcltest\fR ?\fB2002.4.1\fR?
+ 
+ \fBtcltest::test \fIname description\fR ?\fI\-option value ...\fR?
+ \fBtcltest::test \fIname description\fR ?\fIconstraints\fR? \fIbody result\fR
+@@ -35,6 +35,7 @@ tcltest \- Test harness support code and utilities
+ \fBtcltest::configure \fI\-option value\fR ?\fI\-option value ...\fR?
+ \fBtcltest::customMatch \fImode command\fR
+ \fBtcltest::testConstraint \fIconstraint\fR ?\fIvalue\fR?
++\fBtcltest::removeTestConstraint \fIconstraint\fR
+ \fBtcltest::outputChannel \fR?\fIchannelID\fR?
+ \fBtcltest::errorChannel \fR?\fIchannelID\fR?
+ \fBtcltest::interpreter \fR?\fIinterp\fR?
+@@ -57,7 +58,10 @@ tcltest \- Test harness support code and utilities
+ \fBtcltest::testsDirectory \fR?\fIdirectory\fR?
+ \fBtcltest::verbose \fR?\fIlevel\fR?
+ 
++\fBtcltest::setup \fR?\fIname\fR? \fIcode\fR
++\fBtcltest::cleanup \fR?\fIname\fR? \fIcode\fR
+ \fBtcltest::test \fIname description optionList\fR
++
+ \fBtcltest::bytestring \fIstring\fR
+ \fBtcltest::normalizeMsg \fImsg\fR
+ \fBtcltest::normalizePath \fIpathVar\fR
+@@ -90,6 +94,15 @@ of how to use the commands of \fBtcltest\fR to produce
+ for your Tcl-enabled code.
+ .SH COMMANDS
+ .TP
++\fBsetup\fR ?\fIname\fR? \fIcode\fR
++Define code to be executed once before any following tests.
++Code will be executed only if any tests between the \fBsetup\fR
++and its matching \fBcleanup\fR have been run.
++.TP
++\fBcleanup\fR ?\fIname\fR? \fIcode\fR
++Define code to be executed once after any previous tests.
++Code will be executed only if the matching \fBsetup\fR code has been executed.
++.TP
+ \fBtest\fR \fIname description\fR ?\fI\-option value ...\fR?
+ .
+ Defines and possibly runs a test with the name \fIname\fR and
+@@ -258,6 +271,10 @@ whether or not the results match.  The built-in matchi
+ Sets or returns the boolean value associated with the named \fIconstraint\fR.
+ See \fBTEST CONSTRAINTS\fR below for more information.
+ .TP
++\fBremoveTestConstraint \fIconstraint\fR
++.
++Removes the named \fIconstraint\fR.
++.TP
+ \fBinterpreter\fR ?\fIexecutableName\fR?
+ .
+ Sets or returns the name of the executable to be \fBexec\fRed by
+@@ -871,12 +888,18 @@ harness are doing.
+ \fB\-verbose \fIlevel\fR
+ .
+ Sets the type of output verbosity desired to \fIlevel\fR,
+-a list of zero or more of the elements \fBbody\fR, \fBpass\fR,
++a list of zero or more of the elements \fBsetup\fR, \fBcleanup\fR, \fBdescr\fR, \fBbody\fR, \fBpass\fR,
+ \fBskip\fR, \fBstart\fR, \fBerror\fR, \fBline\fR, \fBmsec\fR and \fBusec\fR.
+ Default value is
+ .QW "\fBbody error\fR" .
+ Levels are defined as:
+ .RS
++.IP "setup (\fBS\fR)"
++Print output whenever setup code runs
++.IP "cleanup (\fBC\fR)"
++Print output whenever cleanup code runs
++.IP "descr (\fBd\fR)"
++Print the test description with one of start, pass or fail.
+ .IP "body (\fBb\fR)"
+ Display the body of failed tests
+ .IP "pass (\fBp\fR)"

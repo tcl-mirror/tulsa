@@ -1,0 +1,111 @@
+[manpage_begin tulsa n 1.0]
+[require   Tcl 8.6]
+[require   tulsa [opt 1.0]]
+[moddesc   {tulsa}]
+[titledesc {Tcl Unix Local Sockets, Eh?}]
+[category  {Networking}]
+[copyright {2018 Stuart Cassoff <stwo@users.sourceforge.net>}]
+[keywords  socket unix]
+
+[description]
+
+	The Tulsa Tcl extension provides server, client, and pair UNIX socket(2)s.
+
+	Tulsa sockets are Tcl channels and as such support standard Tcl channel configuration options.
+
+
+[section COMMANDS]
+
+[usage namespace import ::tulsa::tulsa]
+
+[list_begin definitions]
+
+	[call [cmd {tulsa pair}]]
+		Returns a connected pair of channels as a 2-element list.
+
+	[call [cmd {tulsa client}] [arg path]]
+		Connects to server at [arg path].
+		Returns the client channel.
+
+	[call [cmd {tulsa server}] [arg path]]
+		Opens a server at [arg path] and listens for incoming connections.
+		A connection point at [arg path] is created on open and removed on close.
+		Exceptional conditions such as abrupt program termination
+		may prevent removing the connection point.
+		Returns the server channel.
+
+	[call [cmd {tulsa accept}] [arg channel]]
+		Accepts a connection on a server channel.
+		If there are no pending connections, blocking channels will block until a connection arrives.
+		Returns the accepted client channel, or an empty string
+		if the channel is non-blocking and there are no pending connections.
+
+	[call [cmd {tulsa srdopts}]]
+		Returns a list of readable server options provided by Tulsa.
+
+	[call [cmd {tulsa swropts}]]
+		Returns a list of writable server options provided by Tulsa.
+
+	[call [cmd {tulsa crdopts}]]
+		Returns a list of readable client options provided by Tulsa.
+
+	[call [cmd {tulsa cwropts}]]
+		Returns a list of writable client options provided by Tulsa.
+
+[list_end]
+
+
+[section {COMMON CONFIGURATION OPTIONS}]
+[list_begin options]
+
+	[opt_def [option -error]]
+		Returns the current error status.
+
+	[opt_def [option -closeonexec]]
+		Sets or retrieves the close-on-exec flag.
+
+[list_end]
+
+
+[section {SERVER CONFIGURATION OPTIONS}]
+[list_begin options]
+
+	[opt_def [option -connectto]]
+		Returns the recommended connection point (path) to the server.
+
+	[opt_def [option -openedon]]
+		Returns the path used to open the server.
+
+[list_end]
+
+
+[section {CLIENT CONFIGURATION OPTIONS}]
+[list_begin options]
+
+	[opt_def [option -peerinfo]]
+		Returns a dict with keys [emph euid] and [term egid].
+
+	[opt_def [option -receivetimeout]]
+		Sets or retrieves the receive timeout as a floating point number of seconds.
+
+	[opt_def [option -sendtimeout]]
+		Sets or retrieves the send timeout as a floating point number of seconds.
+
+	[opt_def [option -sysreceivebuffersize]]
+		Sets or retrieves the system receive buffer size.
+
+	[opt_def [option -syssendbuffersize]]
+		Sets or retrieves the system send buffer size.
+
+	[opt_def [option -receivelowatermark]]
+		Sets or retrieves the system receive low water mark.
+		May not be available. Check [cmd {tulsa crdopts}] or [cmd {tulsa cwropts}].
+
+	[opt_def [option -sendlowatermark]]
+		Sets or retrieves the system send low water mark.
+		May not be available. Check [cmd {tulsa crdopts}] or [cmd {tulsa cwropts}].
+
+[list_end]
+
+
+[manpage_end]

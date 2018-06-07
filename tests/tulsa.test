@@ -1,0 +1,992 @@
+#
+# Test Tulsa
+#
+#
+# Stuart Cassoff
+# Spring 2018
+#
+
+package require Tcl 8.6
+
+namespace eval ::Testing_Tulsa {
+
+if {[package provide tcltest] eq ""} {
+	package require tcltest 2000-
+	tcltest::configure {*}$::argv -testdir [file dir [info script]]
+}
+namespace import ::tcltest::test  ::tcltest::interpreter ::tcltest::testConstraint
+namespace import ::tcltest::setup ::tcltest::cleanup     ::tcltest::removeTestConstraint
+
+proc check_closeonexec {chan} {
+	set res [list]
+	lappend res [chan configure $chan -closeonexec]
+	foreach b [list false yes 0 no true 1] {
+		chan configure $chan -closeonexec $b
+		lappend res [chan configure $chan -closeonexec]
+	}
+	return $res
+}; set check_closeonexec_result {1 0 1 0 0 1 1}
+
+proc check_sysbuffersize {chan which} {
+	set res [list]
+	foreach n [list 0 1000000 5120 -1 -1000 2 1] {
+		chan configure $chan -sys${which}buffersize $n
+		lappend res [chan configure $chan -sys${which}buffersize]
+	}
+	return $res
+}; set check_sysbuffersize_result {1 1000000 5120 1 1 2 1}
+
+proc check_timeout {chan which} {
+	set res [list]
+	foreach n [list 0 1 123 -1 1.0 2.5 3.8 100.1 600 -100.2] {
+		chan configure $chan -${which}timeout $n
+		lappend res [chan configure $chan -${which}timeout]
+	}
+	return [lmap e $res { expr int($e) }]
+}; set check_timeout_result {0 1 123 0 1 2 3 100 600 0}
+
+proc check_lowatermark {chan which} {
+	set res [list]
+	foreach n [list 0 1 123 -1 2 -1000 1000] {
+		chan configure $chan -${which}lowatermark $n
+		lappend res [chan configure $chan -${which}lowatermark]
+	}
+	return $res
+}; set check_lowatermark_result {1 1 123 1 2 1 1000}
+
+coroutine testscript apply {{} { yield; while 1 { yield [string cat _Tulsa_testscript[incr n]] } }}
+coroutine testsrv    apply {{} { yield; while 1 { yield [string cat _Tulsa_testsrv[incr n]]    } }}
+
+proc runtestscript {blob {testscript {}}} {
+	if {$testscript ne {}} { puts sfsdfsdf;exit }
+	if {$testscript eq {}} { set testscript [testscript] }
+	file delete $testscript
+	set f [open $testscript w]
+	chan configure $f -encoding utf-8
+	puts $f {chan configure stdout -buffering line}
+	puts $f {proc out {chan blob} { puts -nonewline $chan $blob\n }}
+	puts $f $blob
+	close $f
+	set f [open "|[list [interpreter] $testscript]" r+]
+	chan configure $f -buffering line
+	return [list $testscript $f]
+}
+
+proc out {chan blob} { puts -nonewline $chan $blob\n }
+
+set CheckChannels [chan names]
+proc checkchannels {} {
+	uplevel 1 { apply {{Channels CheckChannels} {lmap c $Channels { if {$c in $CheckChannels} { continue } else { set c } }}} [chan names] $CheckChannels }
+}
+set CheckVars [list CheckVars errorCode errorInfo {*}[info vars]]
+proc checkvars {} {
+	uplevel 1 { apply {{Vars CheckVars} {lmap v $Vars { if {$v in $CheckVars} { continue } else { set v } }}} [info vars] $CheckVars }
+}
+
+
+setup package {
+	package require tulsa
+}
+
+test tulsa-1.1 {tulsa namespace exists} -body {
+	namespace exists ::tulsa
+} -result 1
+
+test tulsa-1.2 {tulsa namespace ensemble exists} -body {
+	list [namespace ensemble exists ::tulsa::tulsa] [namespace ensemble exists tulsa::tulsa]
+} -result {1 1}
+
+test tulsa-1.3 {tulsa ensemble command configuration} -body {
+	namespace ensemble configure ::tulsa::tulsa
+} -result {-map {} -namespace ::tulsa::tulsa -parameters {} -prefixes 0 -subcommands {} -unknown {}}
+
+test tulsa-1.4 {tulsa ensemble exports} -body {
+	namespace eval ::tulsa { namespace export }
+} -result tulsa
+
+test tulsa-1.5 {tulsa ensemble exports} -body {
+	namespace eval ::tulsa::tulsa { namespace export }
+} -result {client server pair accept srdopts swropts crdopts cwropts tulsa}
+
+
+setup import {
+	namespace import ::tulsa::tulsa
+}
+
+
+test tulsa-2.1 {tulsa command: wrong # args} -body {
+	tulsa
+} -returnCodes error -result {wrong # args: should be "tulsa subcommand ?arg ...?"}
+
+test tulsa-2.2 {tulsa command: bad arg} -body {
+	tulsa bad
+} -returnCodes error -result {unknown subcommand "bad": must be accept, client, crdopts, cwropts, pair, server, srdopts, or swropts}
+
+
+test tulsa-2.10 {tulsa client subcommand: wrong # args} -body {
+	tulsa client
+} -returnCodes error -result {wrong # args: should be "tulsa client path"}
+
+test tulsa-2.11 {tulsa client subcommand: wrong # args} -body {
+	tulsa client a b
+} -returnCodes error -result {wrong # args: should be "tulsa client path"}
+
+test tulsa-2.20 {tulsa server subcommand: wrong # args} -body {
+	tulsa server
+} -returnCodes error -result {wrong # args: should be "tulsa server path"}
+
+test tulsa-2.21 {tulsa server subcommand: wrong # args} -body {
+	tulsa server a b
+} -returnCodes error -result {wrong # args: should be "tulsa server path"}
+
+test tulsa-2.30 {tulsa pair subcommand: wrong # args} -body {
+	tulsa pair a
+} -returnCodes error -result {wrong # args: should be "tulsa pair"}
+
+test tulsa-2.40 {tulsa accept subcommand: wrong # args} -body {
+	tulsa accept
+} -returnCodes error -result {wrong # args: should be "tulsa accept tulsa"}
+
+test tulsa-2.41 {tulsa accept subcommand: wrong # args} -body {
+	tulsa accept a b
+} -returnCodes error -result {wrong # args: should be "tulsa accept tulsa"}
+
+test tulsa-2.50 {tulsa srdopts subcommand: wrong # args} -body {
+	tulsa srdopts a
+} -returnCodes error -result {wrong # args: should be "tulsa srdopts"}
+
+test tulsa-2.51 {tulsa swropts subcommand: wrong # args} -body {
+	tulsa swropts a
+} -returnCodes error -result {wrong # args: should be "tulsa swropts"}
+
+test tulsa-2.52 {tulsa crdopts subcommand: wrong # args} -body {
+	tulsa crdopts a
+} -returnCodes error -result {wrong # args: should be "tulsa crdopts"}
+
+test tulsa-2.53 {tulsa cwropts subcommand: wrong # args} -body {
+	tulsa cwropts a
+} -returnCodes error -result {wrong # args: should be "tulsa cwropts"}
+
+
+setup moisture {
+	testConstraint wet [expr {"-receivelowatermark" in [tulsa crdopts]}]
+}
+
+setup wetopts {
+	set wetopts [expr {[testConstraint wet] ? [list -receivelowatermark -sendlowatermark]: [list]}]
+}
+
+test tulsa-10.1 {tulsa srdopts subcommand: options list} -body {
+	tulsa srdopts
+} -result {-error -connectto -openedon -closeonexec}
+
+test tulsa-10.2 {tulsa swropts subcommand: options list} -body {
+	tulsa swropts
+} -result {-closeonexec}
+
+test tulsa-10.3 {tulsa crdopts subcommand: options list} -body {
+	tulsa crdopts
+} -result [list -error -peerinfo -closeonexec -receivetimeout -sendtimeout -sysreceivebuffersize -syssendbuffersize {*}$wetopts]
+
+test tulsa-10.4 {tulsa cwropts subcommand: options list} -body {
+	tulsa cwropts
+} -result [list -closeonexec -receivetimeout -sendtimeout -sysreceivebuffersize -syssendbuffersize {*}$wetopts]
+
+cleanup wetopts {
+	unset wetopts
+}
+
+
+test tulsa-20.1 {pair: create} -body {
+	set pair [tulsa pair]
+	llength $pair
+} -cleanup {
+	close [lindex $pair 0]
+	close [lindex $pair 1]
+	unset pair
+} -result 2
+
+test tulsa-20.2 {pair: configure closeonexec} -body {
+	list [check_closeonexec $a] [check_closeonexec $b]
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	close $a
+	close $b
+	unset a b
+} -result [lrepeat 2 $check_closeonexec_result]
+
+test tulsa-20.3.1 {pair: configure sysreceivebuffersize} -body {
+	list [check_sysbuffersize $a receive] [check_sysbuffersize $b receive]
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -result [lrepeat 2 $check_sysbuffersize_result]
+
+test tulsa-20.3.2 {pair: configure syssendbuffersize} -body {
+	list [check_sysbuffersize $a send] [check_sysbuffersize $b send]
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -result [lrepeat 2 $check_sysbuffersize_result]
+
+test tulsa-20.4.1 {pair: configure receivetimeout} -body {
+	list [check_timeout $a receive] [check_timeout $b receive]
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -result [lrepeat 2 $check_timeout_result]
+
+test tulsa-20.4.2 {pair: configure sendtimeout} -body {
+	list [check_timeout $a send] [check_timeout $b send]
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -result [lrepeat 2 $check_timeout_result]
+
+test tulsa-20.5.1 {pair: configure receivelowatermark} -constraints {wet} -body {
+	list [check_lowatermark $a receive] [check_lowatermark $b receive]
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -result [lrepeat 2 $check_lowatermark_result]
+
+test tulsa-20.5.2 {pair: configure sendlowatermark} -constraints {wet} -body {
+	list [check_lowatermark $a send] [check_lowatermark $b send]
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -result [lrepeat 2 $check_lowatermark_result]
+
+test tulsa-20.6.1 {pair: configure peerinfo: err if not connected} -body {
+	list [chan configure $a -peerinfo]
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	close $a
+	close $b
+	unset a b
+} -returnCodes error -result {can't get peerinfo: socket is not connected}
+
+test tulsa-20.6.2 {pair: configure peerinfo} -body {
+	list [chan configure $b -peerinfo]
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	close $a
+	close $b
+	unset a b
+} -returnCodes error -result {can't get peerinfo: socket is not connected}
+
+test tulsa-20.6.3 {pair: configure peerinfo} -body {
+	list [dict get [chan configure $a] -peerinfo] [dict get [chan configure $b] -peerinfo]
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	close $a
+	close $b
+	unset a b
+} -result [lrepeat 2 {euid -1 egid -1}]
+
+
+# These are pretty general so do them only on one of the sockets of a pair.
+# Don't bother for clients, servers or the other socket of the pair.
+
+test tulsa-21.1.1 {configure closeonexec: bad value} -body {
+	chan configure $a -closeonexec please
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -result {expected boolean value but got "please"}
+
+test tulsa-21.2.1 {configure sysreceivebuffersize: bad value} -body {
+	chan configure $a -sysreceivebuffersize "0xff bytes"
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -match glob -result {expected integer but got "0xff bytes"}
+
+test tulsa-21.2.2 {pair: configure sysreceivebuffersize: bad value} -body {
+	chan configure $b -sysreceivebuffersize 10000000
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -match glob -result "can't set sys receive buffer size: *"
+
+test tulsa-21.3.1 {pair: configure syssendbuffersize: bad value} -body {
+	chan configure $a -syssendbuffersize infinite
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -match glob -result {expected integer but got "infinite"}
+
+test tulsa-21.3.2 {pair: configure syssendbuffersize: bad value} -body {
+	chan configure $b -syssendbuffersize 10000000
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -match glob -result "can't set sys send buffer size: *"
+
+test tulsa-21.4.1 {pair: configure receivetimeout: bad value} -body {
+	chan configure $a -receivetimeout "100.2 milliseconds"
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -match glob -result {expected floating-point number but got "100.2 milliseconds"}
+
+test tulsa-21.4.2 {pair: configure receivetimeout: bad value} -body {
+	chan configure $a -receivetimeout 1000
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -match glob -result "can't set receive timeout: *"
+
+test tulsa-21.5.1 {pair: configure sendtimeout: bad value} -body {
+	chan configure $a -sendtimeout eons
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -match glob -result {expected floating-point number but got "eons"}
+
+test tulsa-21.5.2 {pair: configure sendtimeout: bad value} -body {
+	chan configure $a -sendtimeout 1000
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -match glob -result "can't set send timeout: *"
+
+test tulsa-21.6.1 {pair: configure receivelowatermark: bad value} -constraints {wet} -body {
+	chan configure $a -receivelowatermark "high tide"
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -match glob -result {expected integer but got "high tide"}
+
+# I can't find a number to make this fail
+test tulsa-21.6.2 {pair: configure receivelowatermark: bad value} -constraints {wet emptyTest} -body {
+	chan configure $a -receivelowatermark 10000000
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -match glob -result "can't set receive low water mark: *"
+
+test tulsa-21.7.1 {pair: configure sendlowatermark: bad value} -constraints {wet} -body {
+	chan configure $a -sendlowatermark "1/2 bucket"
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -match glob -result {expected integer but got "1/2 bucket"}
+
+# I can't find a number to make this fail
+test tulsa-21.7.2 {pair: configure sendlowatermark: bad value} -constraints {wet emptyTest} -body {
+	chan configure $a -sendlowatermark 10000000
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -match glob -result "can't set send low water mark: *"
+
+cleanup moisture {
+	removeTestConstraint wet
+}
+
+test tulsa-22.1 {tulsa accept subcommand: arg not a channel} -body {
+	tulsa accept 1
+} -returnCodes error -result {can not find channel named "1"}
+
+test tulsa-22.2 {
+	tulsa accept subcommand: arg not a tulsa channel
+} -setup {
+	lassign [chan pipe] r w
+} -cleanup {
+	chan close $r
+	chan close $w
+	unset r w
+} -body {
+	tulsa accept $r
+} -returnCodes {
+	error
+} -result {couldn't accept connection: channel is not a Tulsa channel}
+
+test tulsa-22.3 {tulsa accept subcommand: arg not a tulsa server channel} -body {
+	tulsa accept $a
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	chan close $a
+	chan close $b
+	unset a b
+} -returnCodes error -result {couldn't accept connection: Tulsa channel is not a server}
+
+
+test tulsa-28.1 {server: configure closeonexec} -body {
+	check_closeonexec $srv
+} -setup {
+	set srv [tulsa server [testsrv]]
+} -cleanup {
+	close $srv
+	unset srv
+} -result $check_closeonexec_result
+
+
+setup openedon/connectto {
+	set srvname [testsrv]
+}
+
+test tulsa-28.2.0 dummy_to_force_running_openedon/connectto_setup_to_make_'srvname'_exist(cheap)
+
+test tulsa-28.2 {server: configure openedon/connectto} -body {
+	list [chan configure $srv -openedon] [chan configure $srv -connectto]
+} -setup {
+	set srv [tulsa server $srvname]
+} -cleanup {
+	close $srv
+	unset srv
+} -result [list $srvname [file normalize $srvname]]
+
+cleanup openedwith/openedon {
+	unset srvname
+}
+
+test tulsa-30.1 {client and acceptedclient: configure closeonexec} -body {
+	list [check_closeonexec $ccli] [check_closeonexec $acli]
+} -setup {
+	set srv [tulsa server [testsrv]]
+	set ccli [tulsa client [chan configure $srv -connectto]]
+	set acli [tulsa accept $srv]
+} -cleanup {
+	close $srv
+	close $ccli
+	close $acli
+	unset srv ccli acli
+} -result [lrepeat 2 $check_closeonexec_result]
+
+test tulsa-30.1.1 {client and acceptedclient: configure sysreceivebuffersize} -body {
+	list [check_sysbuffersize $ccli receive] [check_sysbuffersize $acli receive]
+} -setup {
+	set srv [tulsa server [testsrv]]
+	set ccli [tulsa client [chan configure $srv -connectto]]
+	set acli [tulsa accept $srv]
+} -cleanup {
+	close $srv
+	close $ccli
+	close $acli
+	unset srv ccli acli
+} -result [lrepeat 2 $check_sysbuffersize_result]
+
+test tulsa-30.1.2 {client and acceptedclient: configure syssendbuffersize} -body {
+	list [check_sysbuffersize $ccli send] [check_sysbuffersize $acli send]
+} -setup {
+	set srv [tulsa server [testsrv]]
+	set ccli [tulsa client [chan configure $srv -connectto]]
+	set acli [tulsa accept $srv]
+} -cleanup {
+	close $srv
+	close $ccli
+	close $acli
+	unset srv ccli acli
+} -result [lrepeat 2 $check_sysbuffersize_result]
+
+test tulsa-30.2.1 {client and acceptedclient: configure receivetimeout} -body {
+	list [check_timeout $ccli receive] [check_timeout $acli receive]
+} -setup {
+	set srv [tulsa server [testsrv]]
+	set ccli [tulsa client [chan configure $srv -connectto]]
+	set acli [tulsa accept $srv]
+} -cleanup {
+	close $srv
+	close $ccli
+	close $acli
+	unset srv ccli acli
+} -result [lrepeat 2 $check_timeout_result]
+
+test tulsa-30.2.2 {client and acceptedclient: configure sendtimeout} -body {
+	list [check_timeout $ccli send] [check_timeout $acli send]
+} -setup {
+	set srv [tulsa server [testsrv]]
+	set ccli [tulsa client [chan configure $srv -connectto]]
+	set acli [tulsa accept $srv]
+} -cleanup {
+	close $srv
+	close $ccli
+	close $acli
+	unset srv ccli acli
+} -result [lrepeat 2 $check_timeout_result]
+
+test tulsa-30.3.1 {client and acceptedclient: configure receivelowatermark} -body {
+	list [check_lowatermark $ccli receive] [check_lowatermark $acli receive]
+} -setup {
+	set srv [tulsa server [testsrv]]
+	set ccli [tulsa client [chan configure $srv -connectto]]
+	set acli [tulsa accept $srv]
+} -cleanup {
+	close $srv
+	close $ccli
+	close $acli
+	unset srv ccli acli
+} -result [lrepeat 2 $check_lowatermark_result]
+
+test tulsa-30.3.2 {client and acceptedclient: configure sendlowatermark} -body {
+	list [check_lowatermark $ccli send] [check_lowatermark $acli send]
+} -setup {
+	set srv [tulsa server [testsrv]]
+	set ccli [tulsa client [chan configure $srv -connectto]]
+	set acli [tulsa accept $srv]
+} -cleanup {
+	close $srv
+	close $ccli
+	close $acli
+	unset srv ccli acli
+} -result [lrepeat 2 $check_lowatermark_result]
+
+
+test tulsa-40.1 {connect to server, server shuts down} -body {
+	out $f $endpoint
+	gets $f connectto
+	set client [tulsa client $connectto]
+	out $client [string repeat x 10000]
+} -setup {
+	set endpoint [testsrv]
+	lassign [runtestscript {
+		package require tulsa
+		namespace import ::tulsa::tulsa
+		proc accept {server} {
+			set ::x done
+		}
+		gets stdin endpoint
+		set timer [after 10000 "set x timed_out"]
+		set server [tulsa server $endpoint]
+		chan event $server readable [list accept $server]
+		out stdout [chan configure $server -connectto]
+		vwait x
+		after cancel $timer
+		close $server
+	}] testscript f
+} -cleanup {
+	close $client
+	close $f
+	file delete $testscript
+	unset testscript endpoint f connectto client
+} -match glob -returnCodes error -result {error writing "tulsa*": broken pipe}
+
+test tulsa-40.2 {connect to server, server accepts then closes client channel} -body {
+	out $f $endpoint
+	gets $f connectto
+	set client [tulsa client $connectto]
+	out $client [string repeat x 10000]
+} -setup {
+	set endpoint [testsrv]
+	lassign [runtestscript {
+		package require tulsa
+		namespace import ::tulsa::tulsa
+		proc accept {server} {
+			close [tulsa accept $server]
+			set ::x done
+		}
+		gets stdin endpoint
+		set timer [after 10000 "set x timed_out"]
+		set server [tulsa server $endpoint]
+		chan event $server readable [list accept $server]
+		out stdout [chan configure $server -connectto]
+		vwait x
+		after cancel $timer
+		close $server
+	}] testscript f
+} -cleanup {
+	close $client
+	close $f
+	file delete $testscript
+	unset testscript endpoint f connectto client
+} -match glob -returnCodes error -result {error writing "tulsa*": broken pipe}
+
+
+test tulsa-50.1 {check peerinfo} -body {
+	out $f $endpoint
+	gets $f connectto
+	set client [tulsa client $connectto]
+	set pic [chan configure $client -peerinfo]
+	set pis [gets $f]
+	close $client
+	expr {$pic eq $pis}
+} -setup {
+	set endpoint [testsrv]
+	lassign [runtestscript {
+		package require tulsa
+		namespace import ::tulsa::tulsa
+		gets stdin endpoint
+		set server [tulsa server $endpoint]
+		out stdout [chan configure $server -connectto]
+		set client [tulsa accept $server]
+		out stdout [chan configure $client -peerinfo]
+		close $client
+		close $server
+	}] testscript f
+} -cleanup {
+	close $f
+	file delete $testscript
+	unset testscript endpoint f connectto client
+	unset pic pis
+} -result 1
+
+
+test tulsa-60.1 {send lots of data} -body {
+	out $f $endpoint
+	gets $f connectto
+	set client [tulsa client $connectto]
+	out $client [string repeat x 12345]
+	flush $client
+	gets $client len
+	close $client
+	set len
+} -setup {
+	set endpoint [testsrv]
+	lassign [runtestscript {
+		package require tulsa
+		namespace import ::tulsa::tulsa
+		proc accept {server} {
+			set client [tulsa accept $server]
+			out $client [string length [gets $client]]
+			#flush $client
+			close $client
+			set ::x done
+		}
+		gets stdin endpoint
+		set timer [after 10000 "set x timed_out"]
+		set server [tulsa server $endpoint]
+		chan event $server readable [list accept $server]
+		out stdout [chan configure $server -connectto]
+		vwait x
+		after cancel $timer
+		close $server
+	}] testscript f
+} -cleanup {
+	close $f
+	file delete $testscript
+	unset testscript endpoint f connectto client
+	unset len
+} -result 12345
+
+
+test tulsa-70.1 {check that blocking really blocks} -body {
+	set times [dict create]
+	out $f $endpoint
+	gets $f connectto
+	set client [tulsa client $connectto]
+	chan configure $client -buffering none -blocking 1 -syssendbuffersize 1
+	dict set times clisendstart [clock seconds]
+	out $client [string repeat a 1]
+	dict set times clisenddone [clock seconds]
+	dict set times [gets $f] [clock seconds]
+	dict set times [gets $f] [clock seconds]
+	after 2000
+	gets $client
+	dict set times [gets $f] [clock seconds]
+	dict set times clirecv [clock seconds]
+	close $client
+	expr {
+		[dict get $times clisenddone] - [dict get $times clisendstart] >= 2 &&
+		[dict get $times srvsenddone] - [dict get $times srvsendstart] >= 2
+	}
+} -setup {
+	set endpoint [testsrv]
+	lassign [runtestscript {
+		package require tulsa
+		namespace import ::tulsa::tulsa
+		gets stdin endpoint
+		set server [tulsa server $endpoint]
+		out stdout [chan configure $server -connectto]
+		set client [tulsa accept $server]
+		chan configure $client -buffering none -blocking 1 -syssendbuffersize 2
+		after 2000
+		out stdout srvrecv
+		gets $client z
+		out stdout srvsendstart
+		out $client $z
+		out stdout srvsenddone
+		close $client
+		close $server
+	}] testscript f
+} -cleanup {
+	close $f
+	file delete $testscript
+	unset testscript endpoint f connectto client
+	unset times
+} -result 1
+
+
+test tulsa-80.1 {worker client talks to server} -body {
+	set l [list]
+	out $f $endpoint
+	gets $f connectto
+	lassign [runtestscript {
+		package require tulsa
+		namespace import ::tulsa::tulsa
+		gets stdin connectto
+		while 1 {
+			gets stdin x
+			set client [tulsa client $connectto]
+			chan configure $client -buffering line
+			out $client $x
+			gets $client x
+			close $client
+			out stdout $x
+			if {$x eq {}} { break }
+		}
+	}] wtestscript worker
+	out $worker $connectto
+	foreach d [list Hello Goodbye {}] {
+		out $worker $d
+		lappend l [gets $worker]
+	}
+	close $worker
+	set l
+} -setup {
+	set endpoint [testsrv]
+	lassign [runtestscript {
+		package require tulsa
+		namespace import ::tulsa::tulsa
+		gets stdin endpoint
+		set server [tulsa server $endpoint]
+		out stdout [chan configure $server -connectto]
+		while 1 {
+			set client [tulsa accept $server]
+			chan configure $client -buffering line
+			gets $client x
+			out $client [string reverse $x]
+			close $client
+			if {$x eq ""} { break }
+		}
+		close $server
+	}] testscript f
+} -cleanup {
+	close $f
+	file delete $testscript
+	file delete $wtestscript
+	unset testscript endpoint f connectto
+	unset wtestscript worker l d
+} -result {olleH eybdooG {}}
+
+
+setup workers {
+	set nworkers 10
+	set msgs [list Hello Goodbye]
+	set rmsgs [lmap m $msgs { string reverse $m }]
+	lappend rmsgs ""
+	set res [concat {*}[lrepeat $nworkers $rmsgs]]
+	lset res end x
+	unset m
+}
+
+test tulsa-80.2.0 dummy_to_force_running_workers_setup_to_make_'res'_exist(cheap)
+
+test tulsa-80.2 {worker clients talk to server} -body {
+	set l [list]
+	set workers [list]
+	out $f $endpoint
+	gets $f connectto
+	for {set i 0} {$i < $nworkers} {incr i} {
+		lassign [runtestscript {
+			package require tulsa
+			namespace import ::tulsa::tulsa
+			gets stdin connectto
+			set client [tulsa client $connectto]
+			chan configure $client -buffering line
+			while 1 {
+				gets stdin x
+				out $client $x
+				gets $client x
+				out stdout $x
+				if {$x in {"" "x"}} { break }
+			}
+			close $client
+		}] wtestscript worker
+		lappend workers $worker
+		lappend wtestscripts $wtestscript
+		set lastworker $worker
+	}
+	foreach worker $workers {
+		set lm [expr {$worker eq $lastworker ? "x" : ""}]
+		out $worker $connectto
+		foreach m [list {*}$msgs $lm] {
+			out $worker $m
+			lappend l [gets $worker]
+		}
+		close $worker
+	}
+	set l
+} -setup {
+	set endpoint [testsrv]
+	lassign [runtestscript {
+		package require tulsa
+		namespace import ::tulsa::tulsa
+		gets stdin endpoint
+		set server [tulsa server $endpoint]
+		out stdout [chan configure $server -connectto]
+		while 1 {
+			set client [tulsa accept $server]
+			chan configure $client -buffering line
+			while 1 {
+				gets $client r
+				out $client [string reverse $r]
+				if {$r in {"" "x"}} { break }
+			}
+			close $client
+			if {$r eq "x"} { break }
+		}
+		close $server
+	}] testscript f
+	set wtestscripts [list]
+} -cleanup {
+	close $f
+	file delete $testscript
+	foreach wtestscript $wtestscripts {
+		file delete $wtestscript
+	}
+	unset testscript endpoint f connectto
+	unset wtestscript wtestscripts worker workers lastworker i l m lm
+} -result $res
+
+cleanup workers {
+	unset nworkers msgs rmsgs res
+}
+
+
+setup lies {
+	lassign [chan pipe] r w
+	set sconf [dict keys [chan configure $r]]
+	close $r
+	close $w
+	unset r w
+}
+
+test tulsa-90.1 {check for client config opts lies} -body {
+	lassign [tulsa pair] a b
+	set tconf [dict keys [dict remove [chan configure $a] {*}$sconf]]
+	close $a
+	close $b
+	lappend tconf -error
+	lsort $tconf
+} -cleanup {
+	unset a b tconf
+} -result [lsort [tulsa crdopts]]
+
+test tulsa-90.2 {check for server config opts lies} -body {
+	set fn [testsrv]
+	set a [tulsa server $fn]
+	set tconf [dict keys [dict remove [chan configure $a] {*}$sconf]]
+	close $a
+	lappend tconf -error
+	lsort $tconf
+} -cleanup {
+	unset fn a tconf
+} -result [lsort [tulsa srdopts]]
+
+cleanup lies {
+	unset sconf
+}
+
+
+test tulsa-1000.10 {tulsa ABOUT command: wrong # args} -body {
+	::tulsa::ABOUT extra
+} -returnCodes error -result {wrong # args: should be "::tulsa::ABOUT"}
+
+test tulsa-1000.11 {tulsa ABOUT command: return value is a dict} -body {
+	expr {[dict size [::tulsa::ABOUT]] >= 0}
+} -result 1
+
+test tulsa-1000.12 {tulsa ABOUT command: check for lies} -body {
+	expr {
+		[package provide [dict get [::tulsa::ABOUT] name]]
+	   eq	[dict get [::tulsa::ABOUT] version]
+	}
+} -result 1
+
+test tulsa-1000.20 {tulsa LICENSE command: wrong # args} -body {
+	::tulsa::LICENSE extra
+} -returnCodes error -result {wrong # args: should be "::tulsa::LICENSE"}
+
+test tulsa-1000.21 {tulsa LICENSE command: return value is a dict} -body {
+	expr {[dict size [::tulsa::LICENSE]] >= 0}
+} -result 1
+
+
+cleanup import {
+	rename tulsa {}
+}
+
+cleanup package {
+	package forget tulsa
+}
+
+
+test checkchannels-0.0  {cheeky channels} -body { checkchannels } -result {}
+test checkvars-0.0      {vagrant vars}    -body { checkvars }     -result {}
+
+unset CheckChannels CheckVars
+
+
+::tcltest::cleanupTests
+flush stdout
+return
+
+}; # namespace eval ::Testing_Tulsa
+
+return
+
+# EOF
