@@ -288,6 +288,8 @@ namespace import ::tulsa::tulsa
 .sp
 \fBtulsa accept\fR \fIchannel\fR
 .sp
+\fBtulsa tulsify\fR \fIfd\fR
+.sp
 \fBtulsa srdopts\fR
 .sp
 \fBtulsa swropts\fR
@@ -322,6 +324,10 @@ If there are no pending connections, blocking channels will block until a connec
 Returns the accepted client channel, or an empty string
 if the channel is non-blocking and there are no pending connections\&.
 .TP
+\fBtulsa tulsify\fR \fIfd\fR
+Wraps a system-specific file descriptor in a new Tulsa client channel\&.
+Returns the client channel\&.
+.TP
 \fBtulsa srdopts\fR
 Returns a list of readable server options provided by Tulsa\&.
 .TP
@@ -341,6 +347,9 @@ Returns the current error status\&.
 .TP
 \fB\fB-closeonexec\fR\fR
 Sets or retrieves the close-on-exec flag\&.
+.TP
+\fB\fB-handle\fR\fR
+Returns the system-specific handle\&.
 .PP
 .SH "SERVER CONFIGURATION OPTIONS"
 .TP

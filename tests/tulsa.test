@@ -17,6 +17,8 @@ if {[package provide tcltest] eq ""} {
 namespace import ::tcltest::test  ::tcltest::interpreter ::tcltest::testConstraint
 namespace import ::tcltest::setup ::tcltest::cleanup     ::tcltest::removeTestConstraint
 
+::tcltest::customMatch substexact [list apply [list {e r} {expr {[namespace eval [namespace current] [list subst $e]] eq $r}} [namespace current]]]
+
 proc check_closeonexec {chan} {
 	set res [list]
 	lappend res [chan configure $chan -closeonexec]
@@ -88,6 +90,7 @@ setup package {
 	package require tulsa
 }
 
+
 test tulsa-1.1 {tulsa namespace exists} -body {
 	namespace exists ::tulsa
 } -result 1
@@ -106,7 +109,7 @@ test tulsa-1.4 {tulsa ensemble exports} -body {
 
 test tulsa-1.5 {tulsa ensemble exports} -body {
 	namespace eval ::tulsa::tulsa { namespace export }
-} -result {client server pair accept srdopts swropts crdopts cwropts tulsa}
+} -result {client server pair accept tulsify srdopts swropts crdopts cwropts tulsa}
 
 
 setup import {
@@ -120,7 +123,7 @@ test tulsa-2.1 {tulsa command: wrong # args} -body {
 
 test tulsa-2.2 {tulsa command: bad arg} -body {
 	tulsa bad
-} -returnCodes error -result {unknown subcommand "bad": must be accept, client, crdopts, cwropts, pair, server, srdopts, or swropts}
+} -returnCodes error -result {unknown subcommand "bad": must be accept, client, crdopts, cwropts, pair, server, srdopts, swropts, or tulsify}
 
 
 test tulsa-2.10 {tulsa client subcommand: wrong # args} -body {
@@ -151,19 +154,27 @@ test tulsa-2.41 {tulsa accept subcommand: wrong # args} -body {
 	tulsa accept a b
 } -returnCodes error -result {wrong # args: should be "tulsa accept tulsa"}
 
-test tulsa-2.50 {tulsa srdopts subcommand: wrong # args} -body {
+test tulsa-2.50 {tulsa tulsify subcommand: wrong # args} -body {
+	tulsa tulsify
+} -returnCodes error -result {wrong # args: should be "tulsa tulsify hd"}
+
+test tulsa-2.51 {tulsa tulsify subcommand: wrong # args} -body {
+	tulsa tulsify a b
+} -returnCodes error -result {wrong # args: should be "tulsa tulsify hd"}
+
+test tulsa-2.60 {tulsa srdopts subcommand: wrong # args} -body {
 	tulsa srdopts a
 } -returnCodes error -result {wrong # args: should be "tulsa srdopts"}
 
-test tulsa-2.51 {tulsa swropts subcommand: wrong # args} -body {
+test tulsa-2.61 {tulsa swropts subcommand: wrong # args} -body {
 	tulsa swropts a
 } -returnCodes error -result {wrong # args: should be "tulsa swropts"}
 
-test tulsa-2.52 {tulsa crdopts subcommand: wrong # args} -body {
+test tulsa-2.62 {tulsa crdopts subcommand: wrong # args} -body {
 	tulsa crdopts a
 } -returnCodes error -result {wrong # args: should be "tulsa crdopts"}
 
-test tulsa-2.53 {tulsa cwropts subcommand: wrong # args} -body {
+test tulsa-2.63 {tulsa cwropts subcommand: wrong # args} -body {
 	tulsa cwropts a
 } -returnCodes error -result {wrong # args: should be "tulsa cwropts"}
 
@@ -176,9 +187,10 @@ setup wetopts {
 	set wetopts [expr {[testConstraint wet] ? [list -receivelowatermark -sendlowatermark]: [list]}]
 }
 
+
 test tulsa-10.1 {tulsa srdopts subcommand: options list} -body {
 	tulsa srdopts
-} -result {-error -connectto -openedon -closeonexec}
+} -result {-error -connectto -openedon -handle -closeonexec}
 
 test tulsa-10.2 {tulsa swropts subcommand: options list} -body {
 	tulsa swropts
@@ -186,18 +198,19 @@ test tulsa-10.2 {tulsa swropts subcommand: options list} -body {
 
 test tulsa-10.3 {tulsa crdopts subcommand: options list} -body {
 	tulsa crdopts
-} -result [list -error -peerinfo -closeonexec -receivetimeout -sendtimeout -sysreceivebuffersize -syssendbuffersize {*}$wetopts]
+} -match substexact -result {[list -error -peerinfo -handle -closeonexec -receivetimeout -sendtimeout -sysreceivebuffersize -syssendbuffersize {*}$wetopts]}
 
 test tulsa-10.4 {tulsa cwropts subcommand: options list} -body {
 	tulsa cwropts
-} -result [list -closeonexec -receivetimeout -sendtimeout -sysreceivebuffersize -syssendbuffersize {*}$wetopts]
+} -match substexact -result {[list -closeonexec -receivetimeout -sendtimeout -sysreceivebuffersize -syssendbuffersize {*}$wetopts]}
+
 
 cleanup wetopts {
 	unset wetopts
 }
 
 
-test tulsa-20.1 {pair: create} -body {
+test tulsa-20.0 {pair: create} -body {
 	set pair [tulsa pair]
 	llength $pair
 } -cleanup {
@@ -206,7 +219,17 @@ test tulsa-20.1 {pair: create} -body {
 	unset pair
 } -result 2
 
-test tulsa-20.2 {pair: configure closeonexec} -body {
+test tulsa-20.1 {pair: configure -error} -body {
+	list [chan configure $a -error] [chan configure $b -error]
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	close $a
+	close $b
+	unset a b
+} -result {{} {}}
+
+test tulsa-20.2 {pair: configure -closeonexec} -body {
 	list [check_closeonexec $a] [check_closeonexec $b]
 } -setup {
 	lassign [tulsa pair] a b
@@ -216,7 +239,7 @@ test tulsa-20.2 {pair: configure closeonexec} -body {
 	unset a b
 } -result [lrepeat 2 $check_closeonexec_result]
 
-test tulsa-20.3.1 {pair: configure sysreceivebuffersize} -body {
+test tulsa-20.3.1 {pair: configure -sysreceivebuffersize} -body {
 	list [check_sysbuffersize $a receive] [check_sysbuffersize $b receive]
 } -setup {
 	lassign [tulsa pair] a b
@@ -226,7 +249,7 @@ test tulsa-20.3.1 {pair: configure sysreceivebuffersize} -body {
 	unset a b
 } -result [lrepeat 2 $check_sysbuffersize_result]
 
-test tulsa-20.3.2 {pair: configure syssendbuffersize} -body {
+test tulsa-20.3.2 {pair: configure -syssendbuffersize} -body {
 	list [check_sysbuffersize $a send] [check_sysbuffersize $b send]
 } -setup {
 	lassign [tulsa pair] a b
@@ -236,7 +259,7 @@ test tulsa-20.3.2 {pair: configure syssendbuffersize} -body {
 	unset a b
 } -result [lrepeat 2 $check_sysbuffersize_result]
 
-test tulsa-20.4.1 {pair: configure receivetimeout} -body {
+test tulsa-20.4.1 {pair: configure -receivetimeout} -body {
 	list [check_timeout $a receive] [check_timeout $b receive]
 } -setup {
 	lassign [tulsa pair] a b
@@ -246,7 +269,7 @@ test tulsa-20.4.1 {pair: configure receivetimeout} -body {
 	unset a b
 } -result [lrepeat 2 $check_timeout_result]
 
-test tulsa-20.4.2 {pair: configure sendtimeout} -body {
+test tulsa-20.4.2 {pair: configure -sendtimeout} -body {
 	list [check_timeout $a send] [check_timeout $b send]
 } -setup {
 	lassign [tulsa pair] a b
@@ -256,7 +279,7 @@ test tulsa-20.4.2 {pair: configure sendtimeout} -body {
 	unset a b
 } -result [lrepeat 2 $check_timeout_result]
 
-test tulsa-20.5.1 {pair: configure receivelowatermark} -constraints {wet} -body {
+test tulsa-20.5.1 {pair: configure -receivelowatermark} -constraints {wet} -body {
 	list [check_lowatermark $a receive] [check_lowatermark $b receive]
 } -setup {
 	lassign [tulsa pair] a b
@@ -266,7 +289,7 @@ test tulsa-20.5.1 {pair: configure receivelowatermark} -constraints {wet} -body 
 	unset a b
 } -result [lrepeat 2 $check_lowatermark_result]
 
-test tulsa-20.5.2 {pair: configure sendlowatermark} -constraints {wet} -body {
+test tulsa-20.5.2 {pair: configure -sendlowatermark} -constraints {wet} -body {
 	list [check_lowatermark $a send] [check_lowatermark $b send]
 } -setup {
 	lassign [tulsa pair] a b
@@ -276,7 +299,7 @@ test tulsa-20.5.2 {pair: configure sendlowatermark} -constraints {wet} -body {
 	unset a b
 } -result [lrepeat 2 $check_lowatermark_result]
 
-test tulsa-20.6.1 {pair: configure peerinfo: err if not connected} -body {
+test tulsa-20.6.1 {pair: configure -peerinfo: err if not connected} -body {
 	list [chan configure $a -peerinfo]
 } -setup {
 	lassign [tulsa pair] a b
@@ -286,7 +309,7 @@ test tulsa-20.6.1 {pair: configure peerinfo: err if not connected} -body {
 	unset a b
 } -returnCodes error -result {can't get peerinfo: socket is not connected}
 
-test tulsa-20.6.2 {pair: configure peerinfo} -body {
+test tulsa-20.6.2 {pair: configure -peerinfo} -body {
 	list [chan configure $b -peerinfo]
 } -setup {
 	lassign [tulsa pair] a b
@@ -296,7 +319,7 @@ test tulsa-20.6.2 {pair: configure peerinfo} -body {
 	unset a b
 } -returnCodes error -result {can't get peerinfo: socket is not connected}
 
-test tulsa-20.6.3 {pair: configure peerinfo} -body {
+test tulsa-20.6.3 {pair: configure -peerinfo} -body {
 	list [dict get [chan configure $a] -peerinfo] [dict get [chan configure $b] -peerinfo]
 } -setup {
 	lassign [tulsa pair] a b
@@ -310,7 +333,7 @@ test tulsa-20.6.3 {pair: configure peerinfo} -body {
 # These are pretty general so do them only on one of the sockets of a pair.
 # Don't bother for clients, servers or the other socket of the pair.
 
-test tulsa-21.1.1 {configure closeonexec: bad value} -body {
+test tulsa-21.1.1 {configure -closeonexec: bad value} -body {
 	chan configure $a -closeonexec please
 } -setup {
 	lassign [tulsa pair] a b
@@ -320,7 +343,7 @@ test tulsa-21.1.1 {configure closeonexec: bad value} -body {
 	unset a b
 } -returnCodes error -result {expected boolean value but got "please"}
 
-test tulsa-21.2.1 {configure sysreceivebuffersize: bad value} -body {
+test tulsa-21.2.1 {configure -sysreceivebuffersize: bad value} -body {
 	chan configure $a -sysreceivebuffersize "0xff bytes"
 } -setup {
 	lassign [tulsa pair] a b
@@ -330,7 +353,7 @@ test tulsa-21.2.1 {configure sysreceivebuffersize: bad value} -body {
 	unset a b
 } -returnCodes error -match glob -result {expected integer but got "0xff bytes"}
 
-test tulsa-21.2.2 {pair: configure sysreceivebuffersize: bad value} -body {
+test tulsa-21.2.2 {pair: configure -sysreceivebuffersize: bad value} -body {
 	chan configure $b -sysreceivebuffersize 10000000
 } -setup {
 	lassign [tulsa pair] a b
@@ -340,7 +363,7 @@ test tulsa-21.2.2 {pair: configure sysreceivebuffersize: bad value} -body {
 	unset a b
 } -returnCodes error -match glob -result "can't set sys receive buffer size: *"
 
-test tulsa-21.3.1 {pair: configure syssendbuffersize: bad value} -body {
+test tulsa-21.3.1 {pair: configure -syssendbuffersize: bad value} -body {
 	chan configure $a -syssendbuffersize infinite
 } -setup {
 	lassign [tulsa pair] a b
@@ -350,7 +373,7 @@ test tulsa-21.3.1 {pair: configure syssendbuffersize: bad value} -body {
 	unset a b
 } -returnCodes error -match glob -result {expected integer but got "infinite"}
 
-test tulsa-21.3.2 {pair: configure syssendbuffersize: bad value} -body {
+test tulsa-21.3.2 {pair: configure -syssendbuffersize: bad value} -body {
 	chan configure $b -syssendbuffersize 10000000
 } -setup {
 	lassign [tulsa pair] a b
@@ -360,7 +383,7 @@ test tulsa-21.3.2 {pair: configure syssendbuffersize: bad value} -body {
 	unset a b
 } -returnCodes error -match glob -result "can't set sys send buffer size: *"
 
-test tulsa-21.4.1 {pair: configure receivetimeout: bad value} -body {
+test tulsa-21.4.1 {pair: configure -receivetimeout: bad value} -body {
 	chan configure $a -receivetimeout "100.2 milliseconds"
 } -setup {
 	lassign [tulsa pair] a b
@@ -370,7 +393,7 @@ test tulsa-21.4.1 {pair: configure receivetimeout: bad value} -body {
 	unset a b
 } -returnCodes error -match glob -result {expected floating-point number but got "100.2 milliseconds"}
 
-test tulsa-21.4.2 {pair: configure receivetimeout: bad value} -body {
+test tulsa-21.4.2 {pair: configure -receivetimeout: bad value} -body {
 	chan configure $a -receivetimeout 1000
 } -setup {
 	lassign [tulsa pair] a b
@@ -380,7 +403,7 @@ test tulsa-21.4.2 {pair: configure receivetimeout: bad value} -body {
 	unset a b
 } -returnCodes error -match glob -result "can't set receive timeout: *"
 
-test tulsa-21.5.1 {pair: configure sendtimeout: bad value} -body {
+test tulsa-21.5.1 {pair: configure -sendtimeout: bad value} -body {
 	chan configure $a -sendtimeout eons
 } -setup {
 	lassign [tulsa pair] a b
@@ -390,7 +413,7 @@ test tulsa-21.5.1 {pair: configure sendtimeout: bad value} -body {
 	unset a b
 } -returnCodes error -match glob -result {expected floating-point number but got "eons"}
 
-test tulsa-21.5.2 {pair: configure sendtimeout: bad value} -body {
+test tulsa-21.5.2 {pair: configure -sendtimeout: bad value} -body {
 	chan configure $a -sendtimeout 1000
 } -setup {
 	lassign [tulsa pair] a b
@@ -400,7 +423,7 @@ test tulsa-21.5.2 {pair: configure sendtimeout: bad value} -body {
 	unset a b
 } -returnCodes error -match glob -result "can't set send timeout: *"
 
-test tulsa-21.6.1 {pair: configure receivelowatermark: bad value} -constraints {wet} -body {
+test tulsa-21.6.1 {pair: configure -receivelowatermark: bad value} -constraints {wet} -body {
 	chan configure $a -receivelowatermark "high tide"
 } -setup {
 	lassign [tulsa pair] a b
@@ -411,7 +434,7 @@ test tulsa-21.6.1 {pair: configure receivelowatermark: bad value} -constraints {
 } -returnCodes error -match glob -result {expected integer but got "high tide"}
 
 # I can't find a number to make this fail
-test tulsa-21.6.2 {pair: configure receivelowatermark: bad value} -constraints {wet emptyTest} -body {
+test tulsa-21.6.2 {pair: configure -receivelowatermark: bad value} -constraints {wet emptyTest} -body {
 	chan configure $a -receivelowatermark 10000000
 } -setup {
 	lassign [tulsa pair] a b
@@ -421,7 +444,7 @@ test tulsa-21.6.2 {pair: configure receivelowatermark: bad value} -constraints {
 	unset a b
 } -returnCodes error -match glob -result "can't set receive low water mark: *"
 
-test tulsa-21.7.1 {pair: configure sendlowatermark: bad value} -constraints {wet} -body {
+test tulsa-21.7.1 {pair: configure -sendlowatermark: bad value} -constraints {wet} -body {
 	chan configure $a -sendlowatermark "1/2 bucket"
 } -setup {
 	lassign [tulsa pair] a b
@@ -432,7 +455,7 @@ test tulsa-21.7.1 {pair: configure sendlowatermark: bad value} -constraints {wet
 } -returnCodes error -match glob -result {expected integer but got "1/2 bucket"}
 
 # I can't find a number to make this fail
-test tulsa-21.7.2 {pair: configure sendlowatermark: bad value} -constraints {wet emptyTest} -body {
+test tulsa-21.7.2 {pair: configure -sendlowatermark: bad value} -constraints {wet emptyTest} -body {
 	chan configure $a -sendlowatermark 10000000
 } -setup {
 	lassign [tulsa pair] a b
@@ -442,9 +465,6 @@ test tulsa-21.7.2 {pair: configure sendlowatermark: bad value} -constraints {wet
 	unset a b
 } -returnCodes error -match glob -result "can't set send low water mark: *"
 
-cleanup moisture {
-	removeTestConstraint wet
-}
 
 test tulsa-22.1 {tulsa accept subcommand: arg not a channel} -body {
 	tulsa accept 1
@@ -475,7 +495,170 @@ test tulsa-22.3 {tulsa accept subcommand: arg not a tulsa server channel} -body 
 } -returnCodes error -result {couldn't accept connection: Tulsa channel is not a server}
 
 
-test tulsa-28.1 {server: configure closeonexec} -body {
+test tulsa-23.1 {tulsa tulsify subcommand: arg not an integer} -body {
+	tulsa tulsify a
+} -returnCodes error -result {expected integer but got "a"}
+
+test tulsa-23.2 {tulsa tulsify subcommand: bad hd} -body {
+	chan configure $a -error
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -result {bad file number}
+
+test tulsa-23.3.1 {tulsa tulsify subcommand, chan configure: bad hd, get -closeonexec} -body {
+	chan configure $a -closeonexec
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't get closeonexec: bad file number}
+
+test tulsa-23.3.2 {tulsa tulsify subcommand, chan configure: bad hd, set -closeonexec} -body {
+	chan configure $a -closeonexec 1
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't set closeonexec: bad file number}
+
+test tulsa-23.4.1 {tulsa tulsify subcommand, chan configure: bad hd, get -receivetimeout} -body {
+	chan configure $a -receivetimeout
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't get receive timeout: bad file number}
+
+test tulsa-23.4.2 {tulsa tulsify subcommand, chan configure: bad hd, set -receivetimeout} -body {
+	chan configure $a -receivetimeout
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't get receive timeout: bad file number}
+
+test tulsa-23.5.1 {tulsa tulsify subcommand, chan configure: bad hd, get -sendtimeout} -body {
+	chan configure $a -sendtimeout
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't get send timeout: bad file number}
+
+test tulsa-23.5.2 {tulsa tulsify subcommand, chan configure: bad hd, set -sendtimeout} -body {
+	chan configure $a -sendtimeout 1.0
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't set send timeout: bad file number}
+
+test tulsa-23.6.1 {tulsa tulsify subcommand, chan configure: bad hd, get -sysreceivebuffersize} -body {
+	chan configure $a -sysreceivebuffersize
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't get sys receive buffer size: bad file number}
+
+test tulsa-23.6.2 {tulsa tulsify subcommand, chan configure: bad hd, set -sysreceivebuffersize} -body {
+	chan configure $a -sysreceivebuffersize 1
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't set sys receive buffer size: bad file number}
+
+test tulsa-23.7.1 {tulsa tulsify subcommand, chan configure: bad hd, get -syssendbuffersize} -body {
+	chan configure $a -syssendbuffersize
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't get sys send buffer size: bad file number}
+
+test tulsa-23.7.2 {tulsa tulsify subcommand, chan configure: bad hd, set -syssendbuffersize} -body {
+	chan configure $a -syssendbuffersize 1
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't set sys send buffer size: bad file number}
+
+test tulsa-23.8.1 {tulsa tulsify subcommand, chan configure: bad hd, get -receivelowatermark} -constraints {wet} -body {
+	chan configure $a -receivelowatermark
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't get receive low water mark: bad file number}
+
+test tulsa-23.8.2 {tulsa tulsify subcommand, chan configure: bad hd, set -receivelowatermark} -constraints {wet} -body {
+	chan configure $a -receivelowatermark 1
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't set receive low water mark: bad file number}
+
+test tulsa-23.9.1 {tulsa tulsify subcommand, chan configure: bad hd, get -sendlowatermark} -constraints {wet} -body {
+	chan configure $a -sendlowatermark
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't get send low water mark: bad file number}
+
+test tulsa-23.9.2 {tulsa tulsify subcommand, chan configure: bad hd, set -sendlowatermark} -constraints {wet} -body {
+	chan configure $a -sendlowatermark 1
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't set send low water mark: bad file number}
+
+test tulsa-23.10 {tulsa tulsify subcommand, chan configure: bad hd, get -peerinfo} -body {
+	chan configure $a -peerinfo
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+} -returnCodes error -result {can't get peerinfo: bad file number}
+
+test tulsa-23.11 {tulsa tulsify subcommand, chan configure: bad hd, get -handle} -body {
+	chan configure $a -handle
+} -setup {
+	set a [tulsa tulsify 666]
+} -cleanup {
+	catch { close $a }
+	unset a
+}  -result 666
+
+
+cleanup moisture {
+	removeTestConstraint wet
+}
+
+
+test tulsa-28.1 {server: configure -closeonexec} -body {
 	check_closeonexec $srv
 } -setup {
 	set srv [tulsa server [testsrv]]
@@ -489,22 +672,23 @@ setup openedon/connectto {
 	set srvname [testsrv]
 }
 
-test tulsa-28.2.0 dummy_to_force_running_openedon/connectto_setup_to_make_'srvname'_exist(cheap)
 
-test tulsa-28.2 {server: configure openedon/connectto} -body {
+test tulsa-28.2 {server: configure -openedon/-connectto} -body {
 	list [chan configure $srv -openedon] [chan configure $srv -connectto]
 } -setup {
 	set srv [tulsa server $srvname]
 } -cleanup {
 	close $srv
 	unset srv
-} -result [list $srvname [file normalize $srvname]]
+} -match substexact -result {[list $srvname [file normalize $srvname]]}
 
-cleanup openedwith/openedon {
+
+cleanup openedon/connectto {
 	unset srvname
 }
 
-test tulsa-30.1 {client and acceptedclient: configure closeonexec} -body {
+
+test tulsa-30.1 {client and acceptedclient: configure -closeonexec} -body {
 	list [check_closeonexec $ccli] [check_closeonexec $acli]
 } -setup {
 	set srv [tulsa server [testsrv]]
@@ -517,7 +701,7 @@ test tulsa-30.1 {client and acceptedclient: configure closeonexec} -body {
 	unset srv ccli acli
 } -result [lrepeat 2 $check_closeonexec_result]
 
-test tulsa-30.1.1 {client and acceptedclient: configure sysreceivebuffersize} -body {
+test tulsa-30.1.1 {client and acceptedclient: configure -sysreceivebuffersize} -body {
 	list [check_sysbuffersize $ccli receive] [check_sysbuffersize $acli receive]
 } -setup {
 	set srv [tulsa server [testsrv]]
@@ -530,7 +714,7 @@ test tulsa-30.1.1 {client and acceptedclient: configure sysreceivebuffersize} -b
 	unset srv ccli acli
 } -result [lrepeat 2 $check_sysbuffersize_result]
 
-test tulsa-30.1.2 {client and acceptedclient: configure syssendbuffersize} -body {
+test tulsa-30.1.2 {client and acceptedclient: configure -syssendbuffersize} -body {
 	list [check_sysbuffersize $ccli send] [check_sysbuffersize $acli send]
 } -setup {
 	set srv [tulsa server [testsrv]]
@@ -543,7 +727,7 @@ test tulsa-30.1.2 {client and acceptedclient: configure syssendbuffersize} -body
 	unset srv ccli acli
 } -result [lrepeat 2 $check_sysbuffersize_result]
 
-test tulsa-30.2.1 {client and acceptedclient: configure receivetimeout} -body {
+test tulsa-30.2.1 {client and acceptedclient: configure -receivetimeout} -body {
 	list [check_timeout $ccli receive] [check_timeout $acli receive]
 } -setup {
 	set srv [tulsa server [testsrv]]
@@ -556,7 +740,7 @@ test tulsa-30.2.1 {client and acceptedclient: configure receivetimeout} -body {
 	unset srv ccli acli
 } -result [lrepeat 2 $check_timeout_result]
 
-test tulsa-30.2.2 {client and acceptedclient: configure sendtimeout} -body {
+test tulsa-30.2.2 {client and acceptedclient: configure -sendtimeout} -body {
 	list [check_timeout $ccli send] [check_timeout $acli send]
 } -setup {
 	set srv [tulsa server [testsrv]]
@@ -569,7 +753,7 @@ test tulsa-30.2.2 {client and acceptedclient: configure sendtimeout} -body {
 	unset srv ccli acli
 } -result [lrepeat 2 $check_timeout_result]
 
-test tulsa-30.3.1 {client and acceptedclient: configure receivelowatermark} -body {
+test tulsa-30.3.1 {client and acceptedclient: configure -receivelowatermark} -body {
 	list [check_lowatermark $ccli receive] [check_lowatermark $acli receive]
 } -setup {
 	set srv [tulsa server [testsrv]]
@@ -582,7 +766,7 @@ test tulsa-30.3.1 {client and acceptedclient: configure receivelowatermark} -bod
 	unset srv ccli acli
 } -result [lrepeat 2 $check_lowatermark_result]
 
-test tulsa-30.3.2 {client and acceptedclient: configure sendlowatermark} -body {
+test tulsa-30.3.2 {client and acceptedclient: configure -sendlowatermark} -body {
 	list [check_lowatermark $ccli send] [check_lowatermark $acli send]
 } -setup {
 	set srv [tulsa server [testsrv]]
@@ -656,7 +840,7 @@ test tulsa-40.2 {connect to server, server accepts then closes client channel} -
 } -match glob -returnCodes error -result {error writing "tulsa*": broken pipe}
 
 
-test tulsa-50.1 {check peerinfo} -body {
+test tulsa-50.1 {check -peerinfo} -body {
 	out $f $endpoint
 	gets $f connectto
 	set client [tulsa client $connectto]
@@ -723,7 +907,7 @@ test tulsa-60.1 {send lots of data} -body {
 } -result 12345
 
 
-test tulsa-70.1 {check that blocking really blocks} -body {
+test tulsa-70.1 {check that -blocking really blocks} -body {
 	set times [dict create]
 	out $f $endpoint
 	gets $f connectto
@@ -833,7 +1017,6 @@ setup workers {
 	unset m
 }
 
-test tulsa-80.2.0 dummy_to_force_running_workers_setup_to_make_'res'_exist(cheap)
 
 test tulsa-80.2 {worker clients talk to server} -body {
 	set l [list]
@@ -900,7 +1083,8 @@ test tulsa-80.2 {worker clients talk to server} -body {
 	}
 	unset testscript endpoint f connectto
 	unset wtestscript wtestscripts worker workers lastworker i l m lm
-} -result $res
+} -match substexact -result {$res}
+
 
 cleanup workers {
 	unset nworkers msgs rmsgs res
@@ -915,6 +1099,7 @@ setup lies {
 	unset r w
 }
 
+
 test tulsa-90.1 {check for client config opts lies} -body {
 	lassign [tulsa pair] a b
 	set tconf [dict keys [dict remove [chan configure $a] {*}$sconf]]
@@ -924,7 +1109,7 @@ test tulsa-90.1 {check for client config opts lies} -body {
 	lsort $tconf
 } -cleanup {
 	unset a b tconf
-} -result [lsort [tulsa crdopts]]
+} -match substexact -result {[lsort [tulsa crdopts]]}
 
 test tulsa-90.2 {check for server config opts lies} -body {
 	set fn [testsrv]
@@ -935,11 +1120,33 @@ test tulsa-90.2 {check for server config opts lies} -body {
 	lsort $tconf
 } -cleanup {
 	unset fn a tconf
-} -result [lsort [tulsa srdopts]]
+} -match substexact -result {[lsort [tulsa srdopts]]}
+
 
 cleanup lies {
 	unset sconf
 }
+
+
+test tulsa-100.1 {pass channel down through [exec]} -body {
+	chan configure $a -buffering line
+	chan configure $b -closeonexec 0
+	exec [interpreter] << [format {
+		package require tulsa
+		set chan [tulsa::tulsa tulsify %d]
+		chan configure $chan -buffering line
+		puts $chan [string reverse [gets $chan]]
+		exit
+	} [chan configure $b -handle]] &
+	close $b
+	puts $a Hello
+	gets $a
+} -setup {
+	lassign [tulsa pair] a b
+} -cleanup {
+	close $a
+	unset a b
+} -result olleH
 
 
 test tulsa-1000.10 {tulsa ABOUT command: wrong # args} -body {

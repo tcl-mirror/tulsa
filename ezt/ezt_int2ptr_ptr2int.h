@@ -1,4 +1,10 @@
-/*** int2ptr_ptr2int.h:begin ***/
+/*** ezt_int2ptr_ptr2int.h:begin ***/
+/*
+ * Macros used to cast between pointers and integers
+ * (e.g. when storing an int * in ClientData).
+ * For compiler warnings about
+ * "cast to/from pointer from/to integer of different size".
+ */
 #if !defined(INT2PTR) && !defined(PTR2INT)
 #   if defined(HAVE_INTPTR_T) || defined(intptr_t)
 #	define INT2PTR(p) ((void *)(intptr_t)(p))
@@ -17,4 +23,4 @@
 #	define PTR2UINT(p) ((unsigned int)(p))
 #   endif
 #endif
-/*** int2ptr_ptr2int.h:end ***/
+/*** ezt_int2ptr_ptr2int.h:end ***/

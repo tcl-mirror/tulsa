@@ -1,0 +1,33 @@
+Ezt - E-Z extension helper bits.
+
+Ezt is a collection of #defines and functions()
+helpful to the Tcl or Jim extension writer.
+
+Features:
+  *  Boilerplate code for extension initialization
+     that can do namespaces and ensembles.
+  *  Junkpile storage facility.
+  *  Conversion to/from timeval.
+  *  A set of #defines that smooth out the differences
+     between Tcl and Jim, allowing extensions to be
+     written that support both.
+  *  The same set of #defines can also be used to
+     write smaller code; some #defines fill in
+     commonly-used values.
+  *  A "report" function that makes it easier to
+     set an interp's result, and macros to make that easier.
+  *  A "wrong # args" function that returns TCL_ERROR.
+  *  Functions and include files for misc stuff,
+     yet to be documented or created, even.
+
+Ezt version 1.0 is:
+  *  ezt.h (Basic ezt)
+  *  ezt_init.c (Extension init)
+  *  ezt_funcs.c (Misc funcs)
+  *  ezt_tj.h (Tcl/Jim)
+  *  ezt_int2ptr_ptr2int.h (Ptr conv)
+  *  ezt_eagain_ewouldblock.h (Blocking)
+  *  README (This file)
+  *  UNLICENSE (License file)
+
+Ezt is public domain. See the UNLICENCE file.

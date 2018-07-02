@@ -20,8 +20,8 @@ EZT_SAFE_INIT	Extension's safe init proc. Example: Myext_SafeInit
 static int
 Ezt_PackageInit (Tcl_Interp *interp) {
 	Tcl_Namespace *ns;
-	ClientData clientData = NULL;
 #ifndef EZT_CMDPROC
+	ClientData clientData = NULL;
 	const Ezt_Cmd *cmd;
 	Tcl_Obj *nameObj;
 #endif
@@ -94,8 +94,8 @@ Ezt_PackageProvide (Tcl_Interp *interp) {
 
 static int
 Ezt_CommonInit (Tcl_Interp *interp) {
-	if (Tcl_InitStubs       (interp,        MIN_TCL_VERSION, 0) == NULL) { return TCL_ERROR; }
-	if (Tcl_PkgRequire      (interp, "Tcl", MIN_TCL_VERSION, 0) == NULL) { return TCL_ERROR; }
+	if (Tcl_InitStubs       (interp,        EZT_MIN_TCL_VER, 0) == NULL) { return TCL_ERROR; }
+	if (Tcl_PkgRequire      (interp, "Tcl", EZT_MIN_TCL_VER, 0) == NULL) { return TCL_ERROR; }
 /*
 	if (Tcl_FindNamespace   (interp, EZT_NS, NULL, 0)           != NULL) { return TCL_OK;    }
 	if (Tcl_CreateNamespace (interp, EZT_NS, NULL, NULL)        == NULL) { return TCL_ERROR; }

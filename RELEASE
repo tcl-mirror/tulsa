@@ -1,1 +1,10 @@
+Summer 2018 - Version 1.1
+
+New configure option: -handle.
+New subcommand: tulsify.
+New example: xsrv.tcl.
+Threadsafe chan counter instead of fd.
+Tests now more Horse-friendly.
+
+
 Spring 2018 - Version 1.0

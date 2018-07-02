@@ -1,5 +1,6 @@
 All of the files in this extension are covered by LICENSE (ISC), except for (if present):
- * tests/testing.tcl: governed by license inside itself (BSD).
- * tclconfig/install-sh: governed by license inside itself (MIT).
- * tcltest/tcltest.tcl: governed by license inside itself (BSD).
- * openbsd-compat/bsd-getpeereid.c: governed by license inside itself (BSD).
+  *  tests/testing.tcl: governed by license inside itself (BSD).
+  *  tclconfig/install-sh: governed by license inside itself (MIT).
+  *  tcltest2k/tcltest2k.tcl: governed by license inside itself (BSD).
+  *  openbsd-compat/bsd-getpeereid.c: governed by license inside itself (BSD).
+  *  ezt/*: governed by ezt/UNLICENSE (Public Domain).

@@ -1,0 +1,13 @@
+Tcltest 2000 - Experiments with tcltest.
+
+Features:
+
+Test groups: Groups of tests sandwiched between setup/cleanup code.
+
+New -verbose options for setup/cleanup code and printing the test description.
+
+New command: removeTestConstraint.
+
+See patch-doc_tcltest_n for more info.
+
+See also the Horse test development tool.

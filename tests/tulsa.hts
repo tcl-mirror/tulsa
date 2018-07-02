@@ -1,8 +1,8 @@
 apply {ts {
     $ts interp		tclsh8.6
     $ts dir		/home/stu/tcl/tulsa/tests
-    $ts env		{TCLLIBPATH=../b ../tcltest}
-    $ts verbose		CSep
+    $ts env		{TCLLIBPATH=../b ../tcltest2k}
+    $ts verbose		tepCSd
     $ts debug		0
     $ts singleproc	0
     $ts preservecore	0

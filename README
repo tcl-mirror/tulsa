@@ -2,7 +2,6 @@ what:	Tulsa
 where:  https://chiselapp.com/user/stwo/repository/tulsa
 who:	Stuart Cassoff <stwo@users.sourceforge.net>
 why:	Tcl Unix Local Sockets, Eh?
-when:	Spring 2018
 how:	$ /path/to/configure ?options? && make
 how:	$ make test
 how:	$ make install

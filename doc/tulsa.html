@@ -128,10 +128,11 @@
 <li><a href="#2"><b class="cmd">tulsa client</b> <i class="arg">path</i></a></li>
 <li><a href="#3"><b class="cmd">tulsa server</b> <i class="arg">path</i></a></li>
 <li><a href="#4"><b class="cmd">tulsa accept</b> <i class="arg">channel</i></a></li>
-<li><a href="#5"><b class="cmd">tulsa srdopts</b></a></li>
-<li><a href="#6"><b class="cmd">tulsa swropts</b></a></li>
-<li><a href="#7"><b class="cmd">tulsa crdopts</b></a></li>
-<li><a href="#8"><b class="cmd">tulsa cwropts</b></a></li>
+<li><a href="#5"><b class="cmd">tulsa tulsify</b> <i class="arg">fd</i></a></li>
+<li><a href="#6"><b class="cmd">tulsa srdopts</b></a></li>
+<li><a href="#7"><b class="cmd">tulsa swropts</b></a></li>
+<li><a href="#8"><b class="cmd">tulsa crdopts</b></a></li>
+<li><a href="#9"><b class="cmd">tulsa cwropts</b></a></li>
 </ul>
 </div>
 </div>
@@ -158,13 +159,16 @@
 		If there are no pending connections, blocking channels will block until a connection arrives.
 		Returns the accepted client channel, or an empty string
 		if the channel is non-blocking and there are no pending connections.</p></dd>
-<dt><a name="5"><b class="cmd">tulsa srdopts</b></a></dt>
+<dt><a name="5"><b class="cmd">tulsa tulsify</b> <i class="arg">fd</i></a></dt>
+<dd><p>Wraps a system-specific file descriptor in a new Tulsa client channel.
+		Returns the client channel.</p></dd>
+<dt><a name="6"><b class="cmd">tulsa srdopts</b></a></dt>
 <dd><p>Returns a list of readable server options provided by Tulsa.</p></dd>
-<dt><a name="6"><b class="cmd">tulsa swropts</b></a></dt>
+<dt><a name="7"><b class="cmd">tulsa swropts</b></a></dt>
 <dd><p>Returns a list of writable server options provided by Tulsa.</p></dd>
-<dt><a name="7"><b class="cmd">tulsa crdopts</b></a></dt>
+<dt><a name="8"><b class="cmd">tulsa crdopts</b></a></dt>
 <dd><p>Returns a list of readable client options provided by Tulsa.</p></dd>
-<dt><a name="8"><b class="cmd">tulsa cwropts</b></a></dt>
+<dt><a name="9"><b class="cmd">tulsa cwropts</b></a></dt>
 <dd><p>Returns a list of writable client options provided by Tulsa.</p></dd>
 </dl>
 </div>
@@ -175,6 +179,8 @@
 <dd><p>Returns the current error status.</p></dd>
 <dt><b class="option"><b class="option">-closeonexec</b></b></dt>
 <dd><p>Sets or retrieves the close-on-exec flag.</p></dd>
+<dt><b class="option"><b class="option">-handle</b></b></dt>
+<dd><p>Returns the system-specific handle.</p></dd>
 </dl>
 </div>
 <div id="section4" class="doctools_section"><h2><a name="section4">SERVER CONFIGURATION OPTIONS</a></h2>

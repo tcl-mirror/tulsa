@@ -1,0 +1,60 @@
+tulsa-install-exa:
+	@echo "Installing example files in $(DESTDIR)${exadir}/"
+	@$(INSTALL_DATA_DIR) $(DESTDIR)${exadir}
+	@echo -n $(INDENT)
+	@list='bsrv.tcl cli.tcl csrv.tcl esrv.tcl pair.tcl timeouts.tcl tsrv.tcl xsrv.tcl'; \
+	for i in $$list; do \
+	    echo -n "$$i "; \
+	    $(INSTALL_SCRIPT) ${srcdir}/examples/$$i $(DESTDIR)${exadir}; \
+	done
+	@echo ""
+
+tulsa-dist: dist-spot
+	list='Makefile.tulsa.in RELEASE'; \
+	for p in $$list; do \
+	    $(DIST_INSTALL_DATA) ${srcdir}/$$p $(DIST_DIR)/; \
+	done
+	$(INSTALL_DATA_DIR) $(DIST_DIR)/unix
+	DIR=unix; \
+	list='$(SRC)'; \
+	for p in $$list; do \
+	    $(DIST_INSTALL_DATA) ${srcdir}/$$DIR/$$p $(DIST_DIR)/$$DIR/; \
+	done
+	$(INSTALL_DATA_DIR) $(DIST_DIR)/doc
+	DIR=doc; \
+	list='${NAME}.man ${NAME}.n ${NAME}.html'; \
+	for p in $$list; do \
+	    $(DIST_INSTALL_DATA) ${srcdir}/$$DIR/$$p $(DIST_DIR)/$$DIR/; \
+	done
+	$(INSTALL_DATA_DIR) $(DIST_DIR)/tests
+	DIR=tests; \
+	list='${TESTFWK} ${PKG_NAME}.test ${PKG_NAME}.hts'; \
+	for p in $$list; do \
+	    $(DIST_INSTALL_DATA) ${srcdir}/$$DIR/$$p $(DIST_DIR)/$$DIR/; \
+	done
+	$(INSTALL_DATA_DIR) $(DIST_DIR)/ezt
+	DIR=ezt; \
+	list='README UNLICENSE \
+		ezt.h ezt_init.c ezt_funcs.c ezt_tj.h \
+		ezt_eagain_ewouldblock.h ezt_int2ptr_ptr2int.h'; \
+	for p in $$list; do \
+	    $(DIST_INSTALL_DATA) ${srcdir}/$$DIR/$$p $(DIST_DIR)/$$DIR/; \
+	done
+	$(INSTALL_DATA_DIR) $(DIST_DIR)/examples
+	DIR=examples; \
+	list='bsrv.tcl cli.tcl csrv.tcl esrv.tcl pair.tcl timeouts.tcl tsrv.tcl xsrv.tcl'; \
+	for p in $$list; do \
+	    $(DIST_INSTALL_SCRIPT) ${srcdir}/$$DIR/$$p $(DIST_DIR)/$$DIR/; \
+	done
+	$(INSTALL_DATA_DIR) $(DIST_DIR)/tcltest2k
+	DIR=tcltest2k; \
+	list='README license.terms patch-doc_tcltest_n pkgIndex.tcl tcltest2k.tcl'; \
+	for p in $$list; do \
+	    $(DIST_INSTALL_DATA) ${srcdir}/$$DIR/$$p $(DIST_DIR)/$$DIR/; \
+	done
+	$(INSTALL_DATA_DIR) $(DIST_DIR)/openbsd-compat
+	DIR=openbsd-compat; \
+	list='bsd-getpeereid.c'; \
+	for p in $$list; do \
+	    $(DIST_INSTALL_DATA) ${srcdir}/$$DIR/$$p $(DIST_DIR)/$$DIR/; \
+	done

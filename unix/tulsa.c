@@ -25,8 +25,6 @@ extern "C" {
 #endif
 
 
-#define MIN_TCL_VERSION "8.6"
-
 #include <assert.h>	/* assert */
 #include <sys/types.h>	/* socket types */
 #include <sys/socket.h>	/* socket */
@@ -38,8 +36,8 @@ extern "C" {
 
 #include <tcl.h>
 
-#include "int2ptr_ptr2int.h"
-#include "eagain_ewouldblock.h"
+#include "ezt_int2ptr_ptr2int.h"
+#include "ezt_eagain_ewouldblock.h"
 
 #define EZT_NS		"::tulsa"
 #define EZT_EN		"tulsa"
@@ -49,7 +47,8 @@ extern "C" {
 #define EZT_PKGINIT	Tulsa_PackageInit
 
 #define EZT_CMD_CLIENTDATA 1
-#define EZT_TIMEVAL 1
+#define EZT_STR2TIMEVAL 1
+#define EZT_TIMEVAL2DBL 1
 
 #include "ezt.h"
 
@@ -59,6 +58,7 @@ TCMD(Tulsa_Tulsa_ABOUT_Cmd);
 TCMD(Tulsa_Tulsa_open_Cmd);
 TCMD(Tulsa_Tulsa_pair_Cmd);
 TCMD(Tulsa_Tulsa_accept_Cmd);
+TCMD(Tulsa_Tulsa_tulsify_Cmd);
 TCMD(Tulsa_Tulsa_srdopts_Cmd);
 TCMD(Tulsa_Tulsa_swropts_Cmd);
 TCMD(Tulsa_Tulsa_crdopts_Cmd);
@@ -69,6 +69,7 @@ static Ezt_Cmd Ezt_Cmds[] = {
 	{ "server"  , Tulsa_Tulsa_open_Cmd    , (ClientData) 1 },
 	{ "pair"    , Tulsa_Tulsa_pair_Cmd    , NULL           },
 	{ "accept"  , Tulsa_Tulsa_accept_Cmd  , NULL           },
+	{ "tulsify" , Tulsa_Tulsa_tulsify_Cmd , NULL           },
 	{ "srdopts" , Tulsa_Tulsa_srdopts_Cmd , NULL           },
 	{ "swropts" , Tulsa_Tulsa_swropts_Cmd , NULL           },
 	{ "crdopts" , Tulsa_Tulsa_crdopts_Cmd , NULL           },
@@ -81,7 +82,7 @@ static Ezt_Cmd Ezt_Cmds[] = {
 typedef struct Tulsa {
 	Tcl_Obj *me;		/* Myself and I */
 	Tcl_Channel ch;		/* Tcl handle */
-	int fd;			/* OS handle */
+	int hd;			/* OS handle */
 	Tcl_Obj *paths;		/* paths to server sockets */
 				/* only servers have non-NULL paths */
 } Tulsa;
@@ -89,9 +90,11 @@ typedef struct Tulsa {
 static Tulsa * Tulsa_NewTulsa (void);
 static void Tulsa_DeleteTulsa (Tulsa *t);
 
-static Tulsa * Tulsa_Tulsify (int fd);
+static Tulsa * Tulsa_Tulsify (int hd);
 static int Tulsa_SetupSockaddr (struct sockaddr_un *sap, Tcl_Obj *path);
 static Tulsa * Tulsa_OpenSocket (Tcl_Interp *interp, Tcl_Obj *path, int server);
+
+static unsigned long Tulsa_Counter (void);
 
 /***/
 
@@ -136,11 +139,11 @@ Tulsa_SocketCloseProc (ClientData instanceData, Tcl_Interp *interp) {
 
 	assert(t);
 
-	if (close(t->fd) < 0) {
+	if (close(t->hd) < 0) {
 		errCode = Tcl_GetErrno();
 	}
 
-	t->fd = -2;
+	t->hd = -2;
 
 	if (t->paths != NULL) {
 		Tcl_Obj *srv_path;
@@ -159,7 +162,7 @@ Tulsa_SocketInputProc (ClientData instanceData, char *buf, int qty, int *errorCo
 	Tulsa *t = (Tulsa *) instanceData;
 	int n;
 
-	*errorCode = (n = read(t->fd, buf, (size_t) qty)) == -1 ? Tcl_GetErrno() : 0;
+	*errorCode = (n = read(t->hd, buf, (size_t) qty)) == -1 ? Tcl_GetErrno() : 0;
 
 	return n;
 }
@@ -170,7 +173,7 @@ Tulsa_SocketOutputProc (ClientData instanceData, const char *buf, int qty, int *
 	Tulsa *t = (Tulsa *) instanceData;
 	int n;
 
-	*errorCode = (n = write(t->fd, buf, (size_t) qty)) == -1 ? Tcl_GetErrno() : 0;
+	*errorCode = (n = write(t->hd, buf, (size_t) qty)) == -1 ? Tcl_GetErrno() : 0;
 
 #if 0
 /* is this needed? */
@@ -191,17 +194,17 @@ Tulsa_SocketWatchProc (ClientData instanceData, int mask) {
 	Tulsa *t = (Tulsa *) instanceData;
 
 	if (mask == 0) {
-		Tcl_DeleteFileHandler(t->fd);
+		Tcl_DeleteFileHandler(t->hd);
 		return;
 	}
 
-	Tcl_CreateFileHandler(t->fd, mask, (Tcl_FileProc *) Tcl_NotifyChannel, (ClientData) t->ch);
+	Tcl_CreateFileHandler(t->hd, mask, (Tcl_FileProc *) Tcl_NotifyChannel, (ClientData) t->ch);
 }
 
 
 static int
 Tulsa_SocketGetHandleProc (ClientData instanceData, int direction, ClientData *handlePtr) {
-	*handlePtr = (ClientData) INT2PTR(((Tulsa *) instanceData)->fd);
+	*handlePtr = (ClientData) INT2PTR(((Tulsa *) instanceData)->hd);
 	return TCL_OK;
 }
 
@@ -211,7 +214,9 @@ Tulsa_SocketBlockModeProc (ClientData instanceData, int mode) {
 	Tulsa *t = (Tulsa *) instanceData;
 	int flags;
 
-	flags = fcntl(t->fd, F_GETFL);
+	if ((flags = fcntl(t->hd, F_GETFL)) == -1) {
+		return Tcl_GetErrno();
+	}
 
 	if (mode == TCL_MODE_BLOCKING) {
 		flags &= ~O_NONBLOCK;
@@ -219,7 +224,7 @@ Tulsa_SocketBlockModeProc (ClientData instanceData, int mode) {
 		flags |= O_NONBLOCK;
 	}
 
-	if (fcntl(t->fd, F_SETFL, flags) == -1) {
+	if (fcntl(t->hd, F_SETFL, flags) == -1) {
 		return Tcl_GetErrno();
 	}
 
@@ -237,7 +242,7 @@ Tulsa_SocketSetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 		if (Tcl_GetBoolean(interp, value, &optionInt) != TCL_OK) {
 			return TCL_ERROR;
 		}
-		if (fcntl(t->fd, F_SETFD, optionInt ? FD_CLOEXEC : 0) == -1) {
+		if (fcntl(t->hd, F_SETFD, optionInt ? FD_CLOEXEC : 0) == -1) {
 			return rperr("can't set closeonexec: ");
 		}
 		return TCL_OK;
@@ -253,7 +258,7 @@ Tulsa_SocketSetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 		if (Ezt_StrToTimeval(interp, value, &tv) != TCL_OK) {
 			return TCL_ERROR;
 		}
-		if (setsockopt(t->fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen) != 0) {
+		if (setsockopt(t->hd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen) != 0) {
 			return rperr("can't set receive timeout: ");
 		}
 		return TCL_OK;
@@ -265,7 +270,7 @@ Tulsa_SocketSetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 		if (Ezt_StrToTimeval(interp, value, &tv) != TCL_OK) {
 			return TCL_ERROR;
 		}
-		if (setsockopt(t->fd, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen) != 0) {
+		if (setsockopt(t->hd, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen) != 0) {
 			return rperr("can't set send timeout: ");
 		}
 		return TCL_OK;
@@ -276,7 +281,7 @@ Tulsa_SocketSetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 		if (Tcl_GetInt(interp, value, &optionInt) != TCL_OK) {
 			return TCL_ERROR;
 		}
-		if (setsockopt(t->fd, SOL_SOCKET, SO_RCVBUF, &optionInt, socklen) != 0) {
+		if (setsockopt(t->hd, SOL_SOCKET, SO_RCVBUF, &optionInt, socklen) != 0) {
 			return rperr("can't set sys receive buffer size: ");
 		}
 		return TCL_OK;
@@ -287,7 +292,7 @@ Tulsa_SocketSetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 		if (Tcl_GetInt(interp, value, &optionInt) != TCL_OK) {
 			return TCL_ERROR;
 		}
-		if (setsockopt(t->fd, SOL_SOCKET, SO_SNDBUF, &optionInt, socklen) != 0) {
+		if (setsockopt(t->hd, SOL_SOCKET, SO_SNDBUF, &optionInt, socklen) != 0) {
 			return rperr("can't set sys send buffer size: ");
 		}
 		return TCL_OK;
@@ -299,7 +304,7 @@ Tulsa_SocketSetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 		if (Tcl_GetInt(interp, value, &optionInt) != TCL_OK) {
 			return TCL_ERROR;
 		}
-		if (setsockopt(t->fd, SOL_SOCKET, SO_RCVLOWAT, &optionInt, socklen) != 0) {
+		if (setsockopt(t->hd, SOL_SOCKET, SO_RCVLOWAT, &optionInt, socklen) != 0) {
 			return rperr("can't set receive low water mark: ");
 		}
 		return TCL_OK;
@@ -310,7 +315,7 @@ Tulsa_SocketSetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 		if (Tcl_GetInt(interp, value, &optionInt) != TCL_OK) {
 			return TCL_ERROR;
 		}
-		if (setsockopt(t->fd, SOL_SOCKET, SO_SNDLOWAT, &optionInt, socklen) != 0) {
+		if (setsockopt(t->hd, SOL_SOCKET, SO_SNDLOWAT, &optionInt, socklen) != 0) {
 			return rperr("can't set send low water mark: ");
 		}
 		return TCL_OK;
@@ -338,7 +343,7 @@ Tulsa_SocketGetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 
 	optName = "-error"; if (len > 0 && Tcl_StringMatch(optionName, optName)) {
 		socklen_t socklen = sizeof optionInt;
-		if (getsockopt(t->fd, SOL_SOCKET, SO_ERROR, (void *) &optionInt, &socklen) == -1) {
+		if (getsockopt(t->hd, SOL_SOCKET, SO_ERROR, (void *) &optionInt, &socklen) == -1) {
 			optionInt = Tcl_GetErrno();
 		}
 		if (optionInt != 0) {
@@ -347,9 +352,18 @@ Tulsa_SocketGetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 		return TCL_OK;
 	}
 
+	optName = "-handle"; if (len == 0 || Tcl_StringMatch(optionName, optName)) {
+		snprintf(optionVal, TCL_INTEGER_SPACE, "%d", t->hd);
+		if (len == 0) { Tcl_DStringAppendElement(dsPtr, optName); }
+		Tcl_DStringAppendElement(dsPtr, optionVal);
+		if (len > 0) { return TCL_OK; }
+	}
+
 	optName = "-closeonexec"; if (len == 0 || Tcl_StringMatch(optionName, optName)) {
 		optionInt = 0;
-		optionInt = fcntl(t->fd, F_GETFD, FD_CLOEXEC);
+		if ((optionInt = fcntl(t->hd, F_GETFD, FD_CLOEXEC)) == -1) {
+			return rperr("can't get closeonexec: ");
+		}
 		optionInt &= FD_CLOEXEC;
 		snprintf(optionVal, TCL_INTEGER_SPACE, "%d", optionInt);
 		if (len == 0) { Tcl_DStringAppendElement(dsPtr, optName); }
@@ -375,7 +389,7 @@ Tulsa_SocketGetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 		}
 
 		if (len > 0) {
-			return Tcl_BadChannelOption(interp, optionName, "error connectto openedon closeonexec");
+			return Tcl_BadChannelOption(interp, optionName, "error connectto openedon closeonexec hd");
 		}
 
 		return TCL_OK;
@@ -386,7 +400,7 @@ Tulsa_SocketGetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 		gid_t egid;
 		if (len == 0) { Tcl_DStringAppendElement(dsPtr, optName); }
 		if (len == 0) { Tcl_DStringStartSublist(dsPtr); }
-		if (getpeereid(t->fd, &euid, &egid) == 0) {
+		if (getpeereid(t->hd, &euid, &egid) == 0) {
 			Tcl_DStringAppendElement(dsPtr, "euid");
 			snprintf(optionVal, TCL_INTEGER_SPACE, "%u", euid);
 			Tcl_DStringAppendElement(dsPtr, optionVal);
@@ -409,7 +423,7 @@ Tulsa_SocketGetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 		Tcl_Obj *o;
 		struct timeval tv;
 		socklen_t socklen = sizeof tv;
-		if (getsockopt(t->fd, SOL_SOCKET, SO_RCVTIMEO, (void *) &tv, &socklen) != 0) {
+		if (getsockopt(t->hd, SOL_SOCKET, SO_RCVTIMEO, (void *) &tv, &socklen) != 0) {
 			return rperr("can't get receive timeout: ");
 		}
 		if (len == 0) { Tcl_DStringAppendElement(dsPtr, optName); }
@@ -424,7 +438,7 @@ Tulsa_SocketGetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 		Tcl_Obj *o;
 		struct timeval tv;
 		socklen_t socklen = sizeof tv;
-		if (getsockopt(t->fd, SOL_SOCKET, SO_SNDTIMEO, (void *) &tv, &socklen) != 0) {
+		if (getsockopt(t->hd, SOL_SOCKET, SO_SNDTIMEO, (void *) &tv, &socklen) != 0) {
 			return rperr("can't get send timeout: ");
 		}
 		if (len == 0) { Tcl_DStringAppendElement(dsPtr, optName); }
@@ -437,7 +451,7 @@ Tulsa_SocketGetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 
 	optName = "-sysreceivebuffersize"; if (len == 0 || Tcl_StringMatch(optionName, optName)) {
 		socklen_t socklen = sizeof optionInt;
-		if (getsockopt(t->fd, SOL_SOCKET, SO_RCVBUF, &optionInt, &socklen) != 0) {
+		if (getsockopt(t->hd, SOL_SOCKET, SO_RCVBUF, &optionInt, &socklen) != 0) {
 			return rperr("can't get sys receive buffer size: ");
 		}
 		snprintf(optionVal, TCL_INTEGER_SPACE, "%d", optionInt);
@@ -448,7 +462,7 @@ Tulsa_SocketGetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 
 	optName = "-syssendbuffersize"; if (len == 0 || Tcl_StringMatch(optionName, optName)) {
 		socklen_t socklen = sizeof optionInt;
-		if (getsockopt(t->fd, SOL_SOCKET, SO_SNDBUF, &optionInt, &socklen) != 0) {
+		if (getsockopt(t->hd, SOL_SOCKET, SO_SNDBUF, &optionInt, &socklen) != 0) {
 			return rperr("can't get sys send buffer size: ");
 		}
 		snprintf(optionVal, TCL_INTEGER_SPACE, "%d", optionInt);
@@ -460,7 +474,7 @@ Tulsa_SocketGetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 #ifdef TULSA_WET
 	optName = "-receivelowatermark"; if (len == 0 || Tcl_StringMatch(optionName, optName)) {
 		socklen_t socklen = sizeof optionInt;
-		if (getsockopt(t->fd, SOL_SOCKET, SO_RCVLOWAT, &optionInt, &socklen) != 0) {
+		if (getsockopt(t->hd, SOL_SOCKET, SO_RCVLOWAT, &optionInt, &socklen) != 0) {
 			return rperr("can't get receive low water mark: ");
 		}
 		snprintf(optionVal, TCL_INTEGER_SPACE, "%d", optionInt);
@@ -471,7 +485,7 @@ Tulsa_SocketGetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 
 	optName = "-sendlowatermark"; if (len == 0 || Tcl_StringMatch(optionName, optName)) {
 		socklen_t socklen = sizeof optionInt;
-		if (getsockopt(t->fd, SOL_SOCKET, SO_SNDLOWAT, &optionInt, &socklen) != 0) {
+		if (getsockopt(t->hd, SOL_SOCKET, SO_SNDLOWAT, &optionInt, &socklen) != 0) {
 			return rperr("can't get send low water mark: ");
 		}
 		snprintf(optionVal, TCL_INTEGER_SPACE, "%d", optionInt);
@@ -483,7 +497,7 @@ Tulsa_SocketGetOptionProc (ClientData instanceData, Tcl_Interp *interp, const ch
 
 	if (len > 0) {
 		return Tcl_BadChannelOption(interp, optionName,
-			"error peerinfo closeonexec receivetimeout sendtimeout sysreceivebuffersize syssendbuffersize"
+			"error peerinfo closeonexec hd receivetimeout sendtimeout sysreceivebuffersize syssendbuffersize"
 #ifdef TULSA_WET
 			" receivelowatermark sendlowatermark"
 #endif
@@ -505,7 +519,7 @@ Tulsa_NewTulsa (void) {
 
 	t->me     = o;
 	t->ch     = NULL;
-	t->fd     = -1;
+	t->hd     = -1;
 	t->paths  = NULL;
 
 	return t;
@@ -531,7 +545,7 @@ Tulsa_DeleteTulsa (Tulsa *t) {
 static Tcl_Channel
 Tulsa_CreateTclChannelMode (Tulsa *t, int mode) {
 	Tcl_Obj *o;
-	o = Tcl_ObjPrintf("tulsa%d", t->fd);
+	o = Tcl_ObjPrintf("tulsa%lu", Tulsa_Counter());
 	Tcl_IncrRefCount(o);
 	t->ch = Tcl_CreateChannel(&TulsaChannelType, Tcl_GetString(o), (ClientData) t, mode);
 	Tcl_DecrRefCount(o);
@@ -549,12 +563,12 @@ Tulsa_CreateTclChannel (Tulsa *t) {
  * Put an OS handle in a new Tulsa.
  */
 static Tulsa *
-Tulsa_Tulsify (int fd) {
+Tulsa_Tulsify (int hd) {
 	Tulsa *t;
 
 	t = Tulsa_NewTulsa();
 
-	t->fd = fd;
+	t->hd = hd;
 
 	return t;
 }
@@ -657,8 +671,10 @@ TCMD(Tulsa_Tulsa_pair_Cmd) {
 		return rperr("couldn't create pair: ");
 	}
 
-	fcntl(sv[0], F_SETFD, FD_CLOEXEC);
-	fcntl(sv[1], F_SETFD, FD_CLOEXEC);
+	if (fcntl(sv[0], F_SETFD, FD_CLOEXEC) == -1 || fcntl(sv[1], F_SETFD, FD_CLOEXEC) == -1) {
+		close(sv[0]); close(sv[1]);
+		return rperr("couldn't create pair: ");
+	}
 
 	l = Tcl_NewListObj(0, NULL);
 	Tcl_IncrRefCount(l);
@@ -709,7 +725,7 @@ TCMD(Tulsa_Tulsa_accept_Cmd) {
 	if (t->paths == NULL) {
 		return rerr(BEM "Tulsa channel is not a server");
 	}
-	if ((sock = accept(t->fd, (struct sockaddr *) &sa, &socklen)) == -1) {
+	if ((sock = accept(t->hd, (struct sockaddr *) &sa, &socklen)) == -1) {
 		if (Tcl_GetErrno() == EAGAIN || Tcl_GetErrno() == EWOULDBLOCK) {
 			return TCL_OK;
 		}
@@ -730,9 +746,22 @@ TCMD(Tulsa_Tulsa_accept_Cmd) {
 #undef BEM
 
 
+TCMD(Tulsa_Tulsa_tulsify_Cmd) {
+	Tulsa *t;
+	int hd;
+	if (objc != 2) { return Ezt_WrongNumArgs(interp, 1, objv, "hd"); }
+	if (Tcl_GetIntFromObj(interp, objv[1], &hd) != TCL_OK) {
+		return TCL_ERROR;
+	}
+	t = Tulsa_Tulsify(hd);
+	Tcl_RegisterChannel(interp, Tulsa_CreateTclChannel(t));
+	Tcl_SetObjResult(interp, Tcl_NewStringObj(Tcl_GetChannelName(t->ch), -1));
+	return TCL_OK;
+}
+
 TCMD(Tulsa_Tulsa_srdopts_Cmd) {
 	if (objc != 1) { return Ezt_WrongNumArgs(interp, 1, objv, NULL); }
-	rerr("-error -connectto -openedon -closeonexec");
+	rerr("-error -connectto -openedon -handle -closeonexec");
 	return TCL_OK;
 }
 
@@ -744,7 +773,7 @@ TCMD(Tulsa_Tulsa_swropts_Cmd) {
 
 TCMD(Tulsa_Tulsa_crdopts_Cmd) {
 	if (objc != 1) { return Ezt_WrongNumArgs(interp, 1, objv, NULL); }
-	rerr("-error -peerinfo -closeonexec -receivetimeout -sendtimeout -sysreceivebuffersize -syssendbuffersize"
+	rerr("-error -peerinfo -handle -closeonexec -receivetimeout -sendtimeout -sysreceivebuffersize -syssendbuffersize"
 #ifdef TULSA_WET
 	     " -receivelowatermark -sendlowatermark"
 #endif
@@ -760,6 +789,21 @@ TCMD(Tulsa_Tulsa_cwropts_Cmd) {
 #endif
 	);
 	return TCL_OK;
+}
+
+
+static unsigned long
+Tulsa_Counter (void) {
+	static unsigned long count = 1;
+	unsigned long c;
+	TCL_DECLARE_MUTEX(tulsaCounterMutex)
+	Tcl_MutexLock(&tulsaCounterMutex);
+	c = count++;
+	if (count == 0) {
+		Tcl_Panic("%s", "Tulsa counter overflow!");
+	}
+	Tcl_MutexUnlock(&tulsaCounterMutex);
+	return c;
 }
 
 
@@ -789,6 +833,7 @@ TCMD(Tulsa_Tulsa_LICENSE_Cmd) {
 	return TCL_OK;
 }
 
+
 TCMD(Tulsa_Tulsa_ABOUT_Cmd) {
 	Tcl_Obj *o;
 	if (objc != 1) { return Ezt_WrongNumArgs(interp, 1, objv, NULL); }
@@ -798,7 +843,7 @@ TCMD(Tulsa_Tulsa_ABOUT_Cmd) {
 	Tcl_DictObjPut(NULL, o, Tcl_NewStringObj("title",   -1), Tcl_NewStringObj("Tulsa", -1));
 	Tcl_DictObjPut(NULL, o, Tcl_NewStringObj("descr",   -1), Tcl_NewStringObj("Tcl Unix Local Sockets, Eh?", -1));
 	Tcl_DictObjPut(NULL, o, Tcl_NewStringObj("author",  -1), Tcl_NewStringObj("Stuart Cassoff", -1));
-	Tcl_DictObjPut(NULL, o, Tcl_NewStringObj("when",    -1), Tcl_NewStringObj("Spring 2018", -1));
+	Tcl_DictObjPut(NULL, o, Tcl_NewStringObj("when",    -1), Tcl_NewStringObj("Summer 2018", -1));
 	Tcl_DictObjPut(NULL, o, Tcl_NewStringObj("version", -1), Tcl_NewStringObj(PACKAGE_VERSION, -1));
 	Tcl_SetObjResult(interp, o);
 	Tcl_DecrRefCount(o);

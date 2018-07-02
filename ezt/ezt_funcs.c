@@ -1,5 +1,4 @@
 /*** Ezt Functions:begin ***/
-
 #ifndef EZT_NO_REPORTERROR
 static int
 Ezt_ReportError (Tcl_Interp *interp, ...) {
@@ -23,21 +22,17 @@ Ezt_WrongNumArgs (Tcl_Interp *interp, int objc, Tcl_Obj *const objv[], const cha
 	Tcl_WrongNumArgs(interp, objc, objv, message);
 	return TCL_ERROR;
 }
-#endif /* EZT_NO_WRONGNUMARGS */
+#endif
 
 
-#ifdef EZT_FROM_TIMEVAL
-
+#ifdef EZT_TIMEVAL2DBL
 static Tcl_Obj *
 Ezt_TimevalToDoubleObj (struct timeval *tv) {
 	return Tcl_NewDoubleObj(tv->tv_sec + tv->tv_usec / 1000000.0);
 }
+#endif
 
-#endif /* EZT_FROM_TIMEVAL */
-
-
-#ifdef EZT_TO_TIMEVAL
-
+#ifdef EZT_STR2TIMEVAL
 static int
 Ezt_StrToTimeval (Tcl_Interp *interp, const char *str, struct timeval *tv) {
 	Tcl_Obj *o;
@@ -48,7 +43,9 @@ Ezt_StrToTimeval (Tcl_Interp *interp, const char *str, struct timeval *tv) {
 	Tcl_DecrRefCount(o);
 	return res;
 }
+#endif
 
+#ifdef EZT_DBL2TIMEVAL
 static int
 Ezt_DoubleObjToTimeval (Tcl_Interp *interp, Tcl_Obj *obj, struct timeval *tv) {
 	double d;
@@ -62,8 +59,7 @@ Ezt_DoubleObjToTimeval (Tcl_Interp *interp, Tcl_Obj *obj, struct timeval *tv) {
 
 	return TCL_OK;
 }
-
-#endif /* EZT_TO_TIMEVAL */
+#endif
 
 
 #ifdef EZT_ASSOCDATA_KEY
@@ -134,7 +130,7 @@ Ezt_NextCounter (Tcl_Interp *interp) {
 	return j->counter++;
 }
 
-#ifdef EZT_FUNC_JUNKPILEASLIST
+# ifdef EZT_FUNC_JUNKPILEASLIST
 /*
  * The returned object has a refcount of 1.
  */
@@ -157,7 +153,7 @@ Ezt_JunkPileAsList (Tcl_Interp *interp) {
 	Tcl_DictObjDone(&s);
 	return o;
 }
-#endif /* EZT_FUNC_JUNKPILEASLIST */
+# endif /* EZT_FUNC_JUNKPILEASLIST */
 
 #endif /* EZT_ASSOCDATA_KEY */
 /*** Ezt Functions:end ***/

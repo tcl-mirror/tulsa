@@ -40,6 +40,10 @@
 		Returns the accepted client channel, or an empty string
 		if the channel is non-blocking and there are no pending connections.
 
+	[call [cmd {tulsa tulsify}] [arg fd]]
+		Wraps a system-specific file descriptor in a new Tulsa client channel.
+		Returns the client channel.
+
 	[call [cmd {tulsa srdopts}]]
 		Returns a list of readable server options provided by Tulsa.
 
@@ -63,6 +67,9 @@
 
 	[opt_def [option -closeonexec]]
 		Sets or retrieves the close-on-exec flag.
+
+	[opt_def [option -handle]]
+		Returns the system-specific handle.
 
 [list_end]
 

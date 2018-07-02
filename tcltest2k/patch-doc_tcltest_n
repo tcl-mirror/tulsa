@@ -1,5 +1,3 @@
-$OpenBSD$
-
 Index: doc/tcltest.n
 --- doc/tcltest.n.orig
 +++ doc/tcltest.n
